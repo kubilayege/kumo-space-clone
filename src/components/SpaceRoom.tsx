@@ -16,7 +16,7 @@ import {
   clampPosition,
   distance,
 } from "@/lib/types";
-import { WebRTCManager } from "@/lib/webrtc";
+import { ConnectionState, WebRTCManager } from "@/lib/webrtc";
 
 interface SpaceRoomProps {
   spaceId: string;
@@ -38,6 +38,7 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStreams, setRemoteStreams] = useState<Map<string, MediaStream>>(new Map());
+  const [peerStates, setPeerStates] = useState<Map<string, ConnectionState>>(new Map());
 
   const keysPressed = useRef(new Set<string>());
   const positionRef = useRef({ x: 600, y: 440 });
@@ -52,17 +53,30 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
   }, [localUser, users]);
 
   useEffect(() => {
-    webrtcRef.current = new WebRTCManager((peerId, stream) => {
-      setRemoteStreams((current) => {
-        const next = new Map(current);
-        if (stream) {
-          next.set(peerId, stream);
-        } else {
-          next.delete(peerId);
-        }
-        return next;
-      });
-    });
+    webrtcRef.current = new WebRTCManager(
+      (peerId, stream) => {
+        setRemoteStreams((current) => {
+          const next = new Map(current);
+          if (stream) {
+            next.set(peerId, stream);
+          } else {
+            next.delete(peerId);
+          }
+          return next;
+        });
+      },
+      (peerId, state) => {
+        setPeerStates((current) => {
+          const next = new Map(current);
+          if (state === "failed") {
+            next.delete(peerId);
+          } else {
+            next.set(peerId, state);
+          }
+          return next;
+        });
+      }
+    );
 
     return () => {
       webrtcRef.current?.destroy();
@@ -335,6 +349,7 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
                   users={users}
                   localStream={localStream}
                   remoteStreams={remoteStreams}
+                  peerStates={peerStates}
                 />
               </div>
             </div>
@@ -349,36 +364,37 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
           <ChatPanel
             messages={messages}
             onSend={handleSendMessage}
-            open={chatOpen}
-            onToggle={() => setChatOpen((value) => !value)}
+            currentUserId={localUser.id}
           />
         </div>
       </div>
 
-      <div className="lg:hidden">
-        {chatOpen && (
-          <div className="fixed inset-0 z-30 bg-black/50" onClick={() => setChatOpen(false)} />
-        )}
-        <ChatPanel
-          messages={messages}
-          onSend={handleSendMessage}
-          open={chatOpen}
-          onToggle={() => setChatOpen((value) => !value)}
-        />
-      </div>
+      {chatOpen && (
+        <div className="lg:hidden">
+          <div
+            className="fixed inset-0 z-30 bg-black/50"
+            onClick={() => setChatOpen(false)}
+          />
+          <div className="fixed inset-y-0 right-0 z-40 w-full max-w-md bg-[#14141b]/95 backdrop-blur">
+            <ChatPanel
+              messages={messages}
+              onSend={handleSendMessage}
+              currentUserId={localUser.id}
+            />
+          </div>
+        </div>
+      )}
 
       <ControlBar
         localUser={localUser}
-        userCount={users.length}
         micEnabled={micEnabled}
         cameraEnabled={cameraEnabled}
-        chatOpen={chatOpen}
+        sidebarOpen={chatOpen}
         onToggleMic={() => updateMedia(!micEnabled, cameraEnabled)}
         onToggleCamera={() => updateMedia(micEnabled, !cameraEnabled)}
-        onToggleChat={() => setChatOpen((value) => !value)}
+        onToggleSidebar={() => setChatOpen((value) => !value)}
         onStatusChange={handleStatusChange}
         onLeave={handleLeave}
-        spaceId={spaceId}
       />
     </div>
   );

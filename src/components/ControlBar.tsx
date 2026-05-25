@@ -1,127 +1,192 @@
 "use client";
 
 import clsx from "clsx";
+import { useEffect, useRef, useState } from "react";
 import {
   Camera,
   CameraOff,
-  ChevronLeft,
+  Check,
+  ChevronDown,
+  LogOut,
   MessageSquare,
   Mic,
   MicOff,
-  Users,
+  PanelRight,
 } from "lucide-react";
 import { User, UserStatus } from "@/lib/types";
 
 interface ControlBarProps {
   localUser: User;
-  userCount: number;
   micEnabled: boolean;
   cameraEnabled: boolean;
-  chatOpen: boolean;
+  sidebarOpen: boolean;
+  chatHasUnread?: boolean;
   onToggleMic: () => void;
   onToggleCamera: () => void;
-  onToggleChat: () => void;
+  onToggleSidebar: () => void;
   onStatusChange: (status: UserStatus) => void;
   onLeave: () => void;
-  spaceId: string;
 }
 
-const statuses: { value: UserStatus; label: string; color: string }[] = [
-  { value: "available", label: "Available", color: "bg-emerald-400" },
-  { value: "busy", label: "Busy", color: "bg-rose-400" },
-  { value: "away", label: "Away", color: "bg-amber-400" },
+const STATUSES: { value: UserStatus; label: string; dotClass: string }[] = [
+  { value: "available", label: "Available", dotClass: "bg-emerald-400" },
+  { value: "busy", label: "Busy", dotClass: "bg-rose-400" },
+  { value: "away", label: "Away", dotClass: "bg-amber-400" },
 ];
 
 export function ControlBar({
   localUser,
-  userCount,
   micEnabled,
   cameraEnabled,
-  chatOpen,
+  sidebarOpen,
   onToggleMic,
   onToggleCamera,
-  onToggleChat,
+  onToggleSidebar,
   onStatusChange,
   onLeave,
-  spaceId,
 }: ControlBarProps) {
+  const [statusOpen, setStatusOpen] = useState(false);
+  const statusRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!statusOpen) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (statusRef.current && !statusRef.current.contains(event.target as Node)) {
+        setStatusOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [statusOpen]);
+
+  const currentStatus = STATUSES.find((s) => s.value === localUser.status) ?? STATUSES[0];
+
   return (
-    <div className="border-t border-white/10 bg-[#12121a]/95 px-4 py-4 backdrop-blur">
-      <div className="mx-auto flex max-w-7xl flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex items-center gap-3">
+    <div className="pointer-events-none absolute bottom-6 left-1/2 z-40 -translate-x-1/2">
+      <div className="pointer-events-auto flex items-center gap-1 rounded-2xl border border-white/[0.08] bg-black/55 p-1.5 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] backdrop-blur-xl">
+        {/* Status pill with dropdown */}
+        <div ref={statusRef} className="relative">
           <button
-            onClick={onLeave}
-            className="flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-sm text-zinc-300 transition hover:border-white/20 hover:text-white"
+            onClick={() => setStatusOpen((v) => !v)}
+            className="flex items-center gap-2 rounded-xl px-3 py-2 text-[12px] font-medium text-zinc-200 transition hover:bg-white/[0.06]"
           >
-            <ChevronLeft className="h-4 w-4" />
-            Leave
-          </button>
-          <div>
-            <p className="font-medium text-white">{spaceId}</p>
-            <p className="flex items-center gap-1 text-sm text-zinc-400">
-              <Users className="h-4 w-4" />
-              {userCount} online
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {statuses.map((status) => (
-            <button
-              key={status.value}
-              onClick={() => onStatusChange(status.value)}
+            <span className={clsx("h-2 w-2 rounded-full", currentStatus.dotClass)} />
+            <span>{currentStatus.label}</span>
+            <ChevronDown
               className={clsx(
-                "flex items-center gap-2 rounded-full px-3 py-1.5 text-sm transition",
-                localUser.status === status.value
-                  ? "bg-white/10 text-white"
-                  : "text-zinc-400 hover:bg-white/5 hover:text-white"
+                "h-3 w-3 text-zinc-400 transition-transform",
+                statusOpen && "rotate-180"
               )}
-            >
-              <span className={clsx("h-2.5 w-2.5 rounded-full", status.color)} />
-              {status.label}
-            </button>
-          ))}
+            />
+          </button>
+
+          {statusOpen && (
+            <div className="absolute bottom-full left-0 mb-2 min-w-[160px] origin-bottom-left rounded-xl border border-white/[0.08] bg-[#11111c]/95 p-1 shadow-2xl backdrop-blur-xl animate-scale-in">
+              {STATUSES.map((status) => (
+                <button
+                  key={status.value}
+                  onClick={() => {
+                    onStatusChange(status.value);
+                    setStatusOpen(false);
+                  }}
+                  className="flex w-full items-center justify-between gap-3 rounded-lg px-2.5 py-2 text-left text-[12px] font-medium text-zinc-200 transition hover:bg-white/[0.06]"
+                >
+                  <span className="flex items-center gap-2">
+                    <span className={clsx("h-2 w-2 rounded-full", status.dotClass)} />
+                    {status.label}
+                  </span>
+                  {status.value === currentStatus.value && (
+                    <Check className="h-3.5 w-3.5 text-indigo-300" />
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={onToggleMic}
-            className={clsx(
-              "flex h-11 w-11 items-center justify-center rounded-xl transition",
-              micEnabled
-                ? "bg-indigo-500 text-white hover:bg-indigo-400"
-                : "bg-white/10 text-zinc-300 hover:bg-white/15"
-            )}
-            aria-label="Toggle microphone"
-          >
-            {micEnabled ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
-          </button>
-          <button
-            onClick={onToggleCamera}
-            className={clsx(
-              "flex h-11 w-11 items-center justify-center rounded-xl transition",
-              cameraEnabled
-                ? "bg-indigo-500 text-white hover:bg-indigo-400"
-                : "bg-white/10 text-zinc-300 hover:bg-white/15"
-            )}
-            aria-label="Toggle camera"
-          >
-            {cameraEnabled ? <Camera className="h-5 w-5" /> : <CameraOff className="h-5 w-5" />}
-          </button>
-          <button
-            onClick={onToggleChat}
-            className={clsx(
-              "hidden h-11 items-center gap-2 rounded-xl px-4 text-sm font-medium transition lg:flex",
-              chatOpen
-                ? "bg-indigo-500 text-white"
-                : "bg-white/10 text-zinc-300 hover:bg-white/15 hover:text-white"
-            )}
-          >
-            <MessageSquare className="h-4 w-4" />
-            Chat
-          </button>
-        </div>
+        <Divider />
+
+        {/* Mic */}
+        <ToggleButton
+          active={micEnabled}
+          onClick={onToggleMic}
+          label={micEnabled ? "Mute" : "Unmute"}
+          icon={micEnabled ? Mic : MicOff}
+          dangerWhenOff
+        />
+
+        {/* Camera */}
+        <ToggleButton
+          active={cameraEnabled}
+          onClick={onToggleCamera}
+          label={cameraEnabled ? "Stop camera" : "Start camera"}
+          icon={cameraEnabled ? Camera : CameraOff}
+        />
+
+        <Divider />
+
+        {/* Sidebar / Chat toggle */}
+        <ToggleButton
+          active={sidebarOpen}
+          onClick={onToggleSidebar}
+          label="Toggle panel"
+          icon={sidebarOpen ? PanelRight : MessageSquare}
+          tone="indigo"
+        />
+
+        <Divider />
+
+        {/* Leave */}
+        <button
+          onClick={onLeave}
+          className="group flex h-9 items-center gap-1.5 rounded-xl bg-rose-500/15 px-3 text-[12px] font-medium text-rose-200 transition hover:bg-rose-500/25"
+        >
+          <LogOut className="h-3.5 w-3.5" />
+          Leave
+        </button>
       </div>
     </div>
+  );
+}
+
+function Divider() {
+  return <span className="mx-0.5 h-6 w-px bg-white/[0.08]" />;
+}
+
+function ToggleButton({
+  active,
+  onClick,
+  label,
+  icon: Icon,
+  dangerWhenOff,
+  tone = "default",
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  dangerWhenOff?: boolean;
+  tone?: "default" | "indigo";
+}) {
+  const activeStyle =
+    tone === "indigo"
+      ? "bg-indigo-500/20 text-indigo-200 ring-1 ring-indigo-400/30"
+      : "bg-emerald-500/15 text-emerald-200 ring-1 ring-emerald-400/25";
+  const inactiveStyle = dangerWhenOff
+    ? "bg-rose-500/10 text-rose-200 hover:bg-rose-500/15"
+    : "bg-white/[0.04] text-zinc-300 hover:bg-white/[0.08]";
+
+  return (
+    <button
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+      className={clsx(
+        "flex h-9 w-9 items-center justify-center rounded-xl transition",
+        active ? activeStyle : inactiveStyle
+      )}
+    >
+      <Icon className="h-4 w-4" strokeWidth={2.2} />
+    </button>
   );
 }
