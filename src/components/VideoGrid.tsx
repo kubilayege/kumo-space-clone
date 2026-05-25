@@ -26,44 +26,43 @@ function VideoTile({
   volume?: number;
   isLocal?: boolean;
 }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const audioRef = useRef<HTMLAudioElement>(null);
+  const mediaRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.srcObject = stream;
-      if (stream) {
-        void videoRef.current.play().catch(() => {});
-      }
-    }
-  }, [stream]);
+    const element = mediaRef.current;
+    if (!element) return;
 
-  useEffect(() => {
-    if (audioRef.current && stream) {
-      audioRef.current.srcObject = stream;
-      audioRef.current.volume = volume ?? 1;
-      void audioRef.current.play().catch(() => {});
+    element.srcObject = stream;
+    element.volume = isLocal ? 0 : (volume ?? 1);
+
+    if (stream) {
+      void element.play().catch(() => {});
     }
-  }, [stream, volume]);
+  }, [stream, volume, isLocal]);
 
   const hasVideo =
     !!stream &&
     stream.getVideoTracks().some((track) => track.readyState === "live" && track.enabled);
 
+  const hasAudio =
+    !!stream &&
+    stream.getAudioTracks().some((track) => track.readyState === "live" && track.enabled);
+
   return (
     <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-zinc-900/80">
-      {stream && !isLocal && <audio ref={audioRef} autoPlay playsInline />}
-      {hasVideo ? (
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted={muted}
-          className="aspect-video w-full object-cover"
-        />
-      ) : (
+      <video
+        ref={mediaRef}
+        autoPlay
+        playsInline
+        muted={muted}
+        className={clsx(
+          "aspect-video w-full object-cover",
+          !hasVideo && "opacity-0"
+        )}
+      />
+      {!hasVideo && (
         <div
-          className="flex aspect-video w-full items-center justify-center text-lg font-semibold text-white"
+          className="absolute inset-0 flex items-center justify-center text-lg font-semibold text-white"
           style={{ backgroundColor: color }}
         >
           {getInitials(name)}
@@ -74,6 +73,9 @@ function VideoTile({
           {name}
           {isLocal ? " (you)" : ""}
         </p>
+        {!isLocal && hasAudio && !hasVideo && (
+          <p className="text-xs text-emerald-300">Speaking nearby</p>
+        )}
       </div>
     </div>
   );

@@ -1,13 +1,19 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0f0f14;
-  --foreground: #f4f4f5;
-  --surface: #18181f;
-  --surface-elevated: #22222c;
-  --border: #2e2e3a;
+  --bg-base: #07070d;
+  --bg-deep: #0b0b14;
+  --bg-surface: #11111c;
+  --bg-elevated: #181826;
+  --bg-glass: rgba(20, 20, 32, 0.72);
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(255, 255, 255, 0.12);
+  --text-primary: #f4f4f7;
+  --text-secondary: #a1a1b2;
+  --text-tertiary: #65657a;
   --accent: #818cf8;
   --accent-strong: #6366f1;
+  --accent-glow: rgba(99, 102, 241, 0.35);
 }
 
 * {
@@ -17,18 +23,16 @@
 html,
 body {
   height: 100%;
+  overflow: hidden;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family:
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-sans, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 button,
@@ -37,8 +41,15 @@ textarea {
   font: inherit;
 }
 
+input,
+textarea,
+button {
+  outline: none;
+}
+
 ::-webkit-scrollbar {
   width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -46,14 +57,21 @@ textarea {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #3f3f46;
+  background: rgba(255, 255, 255, 0.08);
   border-radius: 999px;
+  transition: background 0.2s ease;
 }
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* ------- Animations ------- */
 
 @keyframes float-in {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(12px);
   }
   to {
     opacity: 1;
@@ -62,21 +80,134 @@ textarea {
 }
 
 .animate-float-in {
-  animation: float-in 0.35s ease-out;
+  animation: float-in 0.45s cubic-bezier(0.21, 1, 0.34, 1);
 }
 
-@keyframes pulse-ring {
-  0% {
-    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.45);
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
   }
-  70% {
-    box-shadow: 0 0 0 12px rgba(99, 102, 241, 0);
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-scale-in {
+  animation: scale-in 0.3s cubic-bezier(0.21, 1, 0.34, 1);
+}
+
+@keyframes speak-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(34, 197, 94, 0.35);
+  }
+}
+
+.speak-pulse {
+  animation: speak-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes audio-bar {
+  0%,
+  100% {
+    transform: scaleY(0.4);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+.audio-bar {
+  animation: audio-bar 1s ease-in-out infinite;
+  transform-origin: bottom;
+}
+
+@keyframes drift {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  33% {
+    transform: translate(8px, -6px);
+  }
+  66% {
+    transform: translate(-6px, 4px);
+  }
+}
+
+.drift {
+  animation: drift 9s ease-in-out infinite;
+}
+
+@keyframes blob {
+  0%,
+  100% {
+    border-radius: 56% 44% 64% 36% / 38% 54% 46% 62%;
+    transform: rotate(0deg);
+  }
+  50% {
+    border-radius: 42% 58% 36% 64% / 56% 38% 62% 44%;
+    transform: rotate(180deg);
+  }
+}
+
+.blob {
+  animation: blob 18s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
+    background-position: 200% 0;
   }
 }
 
-.pulse-ring {
-  animation: pulse-ring 2s infinite;
+.shimmer {
+  background-size: 200% 100%;
+  animation: shimmer 2.4s linear infinite;
+}
+
+/* ------- Utility patterns ------- */
+
+.dot-grid {
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.floor-pattern {
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.035) 1px, transparent 0),
+    linear-gradient(180deg, #11111e 0%, #0c0c16 100%);
+  background-size: 28px 28px, cover;
+}
+
+.glass {
+  background: rgba(17, 17, 28, 0.72);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.glass-strong {
+  background: rgba(11, 11, 20, 0.85);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.text-balance {
+  text-wrap: balance;
+}
+
+/* ------- Focus rings ------- */
+
+.focus-ring:focus-visible {
+  box-shadow: 0 0 0 2px var(--bg-base), 0 0 0 4px var(--accent-strong);
 }

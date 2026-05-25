@@ -131,10 +131,26 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
 
   useEffect(() => {
     const socketId = getSocket().id;
-    if (socketId) {
+    if (socketId && localUser) {
       webrtcRef.current?.syncPeers(nearbyPeerIds, socketId);
     }
-  }, [nearbyPeerIds]);
+  }, [nearbyPeerIds, localUser]);
+
+  useEffect(() => {
+    const resumeAudio = () => {
+      document.querySelectorAll("video").forEach((element) => {
+        void element.play().catch(() => {});
+      });
+    };
+
+    window.addEventListener("pointerdown", resumeAudio);
+    window.addEventListener("keydown", resumeAudio);
+
+    return () => {
+      window.removeEventListener("pointerdown", resumeAudio);
+      window.removeEventListener("keydown", resumeAudio);
+    };
+  }, []);
 
   const emitMove = useCallback((x: number, y: number) => {
     positionRef.current = { x, y };
@@ -252,6 +268,12 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
 
     setLocalStream(stream);
     await webrtcRef.current?.setLocalStream(stream);
+
+    const socketId = getSocket().id;
+    if (socketId) {
+      await webrtcRef.current?.syncPeers(nearbyPeerIds, socketId);
+    }
+
     getSocket().emit("user:media", {
       micEnabled: nextMic,
       cameraEnabled: nextCamera,
