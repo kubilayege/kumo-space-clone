@@ -127,11 +127,11 @@ function VideoTile({
     const element = mediaRef.current;
     if (!element) return;
     element.srcObject = tile.stream;
-    element.volume = tile.isLocal ? 0 : tile.volume;
+    element.volume = 0;
     if (tile.stream) {
       void element.play().catch(() => {});
     }
-  }, [tile.stream, tile.volume, tile.isLocal]);
+  }, [tile.stream]);
 
   const hasVideo =
     !!tile.stream &&
@@ -157,7 +157,7 @@ function VideoTile({
         ref={mediaRef}
         autoPlay
         playsInline
-        muted={tile.isLocal}
+        muted
         className={clsx(
           "aspect-video w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]",
           !hasVideo && "opacity-0"

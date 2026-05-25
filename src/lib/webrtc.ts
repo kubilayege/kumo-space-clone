@@ -347,6 +347,12 @@ export class WebRTCManager {
           console.warn(`[webrtc] answer failed for ${peerId}:`, err);
         }
       }
+
+      if (pc.signalingState === "stable") {
+        console.log(
+          `[webrtc] ${peerId} directions: audio=${entry.audioTransceiver.currentDirection} video=${entry.videoTransceiver.currentDirection}`
+        );
+      }
       return;
     }
 

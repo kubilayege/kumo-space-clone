@@ -7,6 +7,7 @@ import { Copy, Users, X } from "lucide-react";
 import { ChatPanel } from "@/components/ChatPanel";
 import { ControlBar } from "@/components/ControlBar";
 import { OfficeCanvas } from "@/components/OfficeCanvas";
+import { SpatialAudio } from "@/components/SpatialAudio";
 import { VideoGrid } from "@/components/VideoGrid";
 import { disconnectSocket, getSocket, joinSpace } from "@/lib/socket";
 import {
@@ -318,6 +319,7 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-[#07070d]">
+      <SpatialAudio localUser={localUser} users={users} remoteStreams={remoteStreams} />
       <div className="flex h-full">
         {/* Office canvas area */}
         <div className="relative flex min-w-0 flex-1 flex-col">
