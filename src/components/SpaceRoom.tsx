@@ -130,7 +130,10 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
   }, [spaceId, name, color]);
 
   useEffect(() => {
-    webrtcRef.current?.syncPeers(nearbyPeerIds);
+    const socketId = getSocket().id;
+    if (socketId) {
+      webrtcRef.current?.syncPeers(nearbyPeerIds, socketId);
+    }
   }, [nearbyPeerIds]);
 
   const emitMove = useCallback((x: number, y: number) => {

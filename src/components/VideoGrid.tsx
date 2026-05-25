@@ -32,17 +32,23 @@ function VideoTile({
   useEffect(() => {
     if (videoRef.current) {
       videoRef.current.srcObject = stream;
+      if (stream) {
+        void videoRef.current.play().catch(() => {});
+      }
     }
   }, [stream]);
 
   useEffect(() => {
-    if (audioRef.current) {
+    if (audioRef.current && stream) {
       audioRef.current.srcObject = stream;
       audioRef.current.volume = volume ?? 1;
+      void audioRef.current.play().catch(() => {});
     }
   }, [stream, volume]);
 
-  const hasVideo = stream?.getVideoTracks().some((track) => track.enabled);
+  const hasVideo =
+    !!stream &&
+    stream.getVideoTracks().some((track) => track.readyState === "live" && track.enabled);
 
   return (
     <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-zinc-900/80">
