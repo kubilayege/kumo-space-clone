@@ -9,6 +9,7 @@ interface PeerEntry {
   audioTransceiver: RTCRtpTransceiver;
   videoTransceiver: RTCRtpTransceiver;
   remoteStream: MediaStream;
+  statsTimer?: ReturnType<typeof setInterval>;
 }
 
 export type ConnectionState = "new" | "connecting" | "connected" | "failed";
@@ -94,29 +95,45 @@ export class WebRTCManager {
       }
     };
 
+    const publishStream = () => {
+      const fresh = new MediaStream(entry.remoteStream.getTracks());
+      entry.remoteStream = fresh;
+      this.onRemoteStream?.(peerId, fresh);
+    };
+
     pc.ontrack = (event) => {
       const incoming = event.track;
-      const sameKind = remoteStream.getTracks().filter((t) => t.kind === incoming.kind);
+      const sameKind = entry.remoteStream
+        .getTracks()
+        .filter((t) => t.kind === incoming.kind);
       for (const existing of sameKind) {
-        if (existing.id !== incoming.id) remoteStream.removeTrack(existing);
+        if (existing.id !== incoming.id) entry.remoteStream.removeTrack(existing);
       }
-      if (!remoteStream.getTracks().some((t) => t.id === incoming.id)) {
-        remoteStream.addTrack(incoming);
+      if (!entry.remoteStream.getTracks().some((t) => t.id === incoming.id)) {
+        entry.remoteStream.addTrack(incoming);
       }
 
-      incoming.onunmute = () => this.onRemoteStream?.(peerId, remoteStream);
-      this.onRemoteStream?.(peerId, remoteStream);
+      publishStream();
 
-      if (typeof window !== "undefined") {
-        console.log(`[webrtc] track from ${peerId}: kind=${incoming.kind} live=${incoming.readyState}`);
-      }
+      incoming.onunmute = () => {
+        console.log(`[webrtc] ${peerId} ${incoming.kind} unmuted`);
+        publishStream();
+      };
+      incoming.onmute = () => {
+        console.log(`[webrtc] ${peerId} ${incoming.kind} muted`);
+      };
+
+      console.log(
+        `[webrtc] track from ${peerId}: kind=${incoming.kind} muted=${incoming.muted} state=${incoming.readyState}`
+      );
     };
 
     pc.onconnectionstatechange = () => {
-      if (typeof window !== "undefined") {
-        console.log(`[webrtc] ${peerId} connection: ${pc.connectionState}`);
-      }
+      console.log(`[webrtc] ${peerId} connection: ${pc.connectionState}`);
       this.onPeerState?.(peerId, this.mapState(pc.connectionState));
+      if (pc.connectionState === "connected" && !entry.statsTimer) {
+        entry.statsTimer = setInterval(() => this.logStats(peerId), 5000);
+      }
       if (pc.connectionState === "failed") {
         pc.restartIce();
       }
@@ -126,9 +143,7 @@ export class WebRTCManager {
     };
 
     pc.oniceconnectionstatechange = () => {
-      if (typeof window !== "undefined") {
-        console.log(`[webrtc] ${peerId} ice: ${pc.iceConnectionState}`);
-      }
+      console.log(`[webrtc] ${peerId} ice: ${pc.iceConnectionState}`);
     };
 
     pc.onnegotiationneeded = () => {
@@ -161,16 +176,55 @@ export class WebRTCManager {
 
     for (const [peerId, entry] of this.peers) {
       try {
-        await entry.audioTransceiver.sender.replaceTrack(
-          stream?.getAudioTracks()[0] ?? null
+        const audioTrack = stream?.getAudioTracks()[0] ?? null;
+        const videoTrack = stream?.getVideoTracks()[0] ?? null;
+
+        await entry.audioTransceiver.sender.replaceTrack(audioTrack);
+        await entry.videoTransceiver.sender.replaceTrack(videoTrack);
+
+        console.log(
+          `[webrtc] sending to ${peerId}: audio=${!!audioTrack} video=${!!videoTrack}`
         );
-        await entry.videoTransceiver.sender.replaceTrack(
-          stream?.getVideoTracks()[0] ?? null
-        );
+
+        await this.negotiate(peerId);
       } catch (err) {
         console.warn(`[webrtc] replaceTrack failed for ${peerId}:`, err);
       }
     }
+  }
+
+  private async logStats(peerId: string) {
+    const entry = this.peers.get(peerId);
+    if (!entry) return;
+
+    const stats = await entry.pc.getStats();
+    let outAudio = 0;
+    let inAudio = 0;
+    let outVideo = 0;
+    let inVideo = 0;
+    let selectedPair: string | undefined;
+
+    stats.forEach((report) => {
+      if (report.type === "outbound-rtp" && report.kind === "audio") {
+        outAudio = report.packetsSent ?? 0;
+      }
+      if (report.type === "inbound-rtp" && report.kind === "audio") {
+        inAudio = report.packetsReceived ?? 0;
+      }
+      if (report.type === "outbound-rtp" && report.kind === "video") {
+        outVideo = report.packetsSent ?? 0;
+      }
+      if (report.type === "inbound-rtp" && report.kind === "video") {
+        inVideo = report.packetsReceived ?? 0;
+      }
+      if (report.type === "candidate-pair" && report.selected) {
+        selectedPair = `${report.localCandidateId}->${report.remoteCandidateId}`;
+      }
+    });
+
+    console.log(
+      `[webrtc-stats] ${peerId} audio out=${outAudio} in=${inAudio} | video out=${outVideo} in=${inVideo} | pair=${selectedPair ?? "?"}`
+    );
   }
 
   private async negotiate(peerId: string) {
@@ -280,6 +334,7 @@ export class WebRTCManager {
   removePeer(peerId: string) {
     const entry = this.peers.get(peerId);
     if (entry) {
+      if (entry.statsTimer) clearInterval(entry.statsTimer);
       entry.pc.close();
       this.peers.delete(peerId);
     }

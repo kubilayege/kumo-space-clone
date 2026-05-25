@@ -11,7 +11,7 @@ import {
   distance,
 } from "../src/lib/types";
 
-const PORT = Number(process.env.PORT ?? process.env.SOCKET_PORT ?? 3001);
+const PORT = Number(process.env.SOCKET_PORT ?? process.env.PORT ?? 3001);
 
 function getAllowedOrigins(): string[] {
   const raw = process.env.ALLOWED_ORIGINS ?? process.env.CLIENT_ORIGIN ?? "http://localhost:3000";
