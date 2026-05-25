@@ -10,13 +10,13 @@ import { OfficeCanvas } from "@/components/OfficeCanvas";
 import { VideoGrid } from "@/components/VideoGrid";
 import { disconnectSocket, getSocket, joinSpace } from "@/lib/socket";
 import {
-  AUDIO_RANGE,
   ChatMessage,
+  DEFAULT_OFFICE,
   MOVE_SPEED,
   User,
   UserStatus,
   clampPosition,
-  distance,
+  getZoneAt,
 } from "@/lib/types";
 import { ConnectionState, WebRTCManager } from "@/lib/webrtc";
 
@@ -48,12 +48,15 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
   const webrtcRef = useRef<WebRTCManager | null>(null);
   const animationRef = useRef<number | null>(null);
 
-  const nearbyPeerIds = useMemo(() => {
+  const peerIds = useMemo(() => {
     if (!localUser) return [];
-    return users
-      .filter((user) => user.id !== localUser.id && distance(localUser, user) <= AUDIO_RANGE)
-      .map((user) => user.id);
+    return users.filter((user) => user.id !== localUser.id).map((user) => user.id);
   }, [localUser, users]);
+
+  const currentZone = useMemo(() => {
+    if (!localUser) return null;
+    return getZoneAt(localUser.x, localUser.y, DEFAULT_OFFICE);
+  }, [localUser]);
 
   useEffect(() => {
     webrtcRef.current = new WebRTCManager(
@@ -143,9 +146,9 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
   useEffect(() => {
     const socketId = getSocket().id;
     if (socketId && localUser) {
-      webrtcRef.current?.syncPeers(nearbyPeerIds, socketId);
+      webrtcRef.current?.syncPeers(peerIds, socketId);
     }
-  }, [nearbyPeerIds, localUser]);
+  }, [peerIds, localUser]);
 
   useEffect(() => {
     const resumeAudio = () => {
@@ -260,7 +263,7 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
 
     const socketId = getSocket().id;
     if (socketId) {
-      await webrtcRef.current?.syncPeers(nearbyPeerIds, socketId);
+      await webrtcRef.current?.syncPeers(peerIds, socketId);
     }
 
     getSocket().emit("user:media", {
@@ -410,6 +413,7 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
                   messages={messages}
                   onSend={handleSendMessage}
                   currentUserId={localUser.id}
+                  currentZone={currentZone}
                 />
               </div>
             </div>

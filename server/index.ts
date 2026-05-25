@@ -9,6 +9,7 @@ import {
   UserStatus,
   clampPosition,
   distance,
+  getZoneAt,
 } from "../src/lib/types";
 
 const PORT = Number(process.env.SOCKET_PORT ?? process.env.PORT ?? 3001);
@@ -170,6 +171,8 @@ io.on("connection", (socket: Socket) => {
       const text = payload.text.trim();
       if (!text) return;
 
+      const zone = getZoneAt(user.x, user.y, DEFAULT_OFFICE);
+
       const message = addChatMessage(currentSpaceId, {
         id: uuidv4(),
         userId: user.id,
@@ -178,6 +181,7 @@ io.on("connection", (socket: Socket) => {
         text: text.slice(0, 500),
         scope: payload.scope,
         timestamp: Date.now(),
+        zoneId: zone?.id,
       });
 
       if (payload.scope === "all" || payload.scope === "floor") {

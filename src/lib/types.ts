@@ -19,6 +19,7 @@ export interface ChatMessage {
   text: string;
   scope: "nearby" | "floor" | "all";
   timestamp: number;
+  zoneId?: string;
 }
 
 export interface RoomZone {

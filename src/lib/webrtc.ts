@@ -144,6 +144,9 @@ export class WebRTCManager {
       console.log(`[webrtc] ${peerId} connection: ${pc.connectionState}`);
       this.onPeerState?.(peerId, this.mapState(pc.connectionState));
       if (pc.connectionState === "connected" && !entry.statsTimer) {
+        console.log(
+          `[webrtc] ${peerId} directions: audio=${entry.audioTransceiver.currentDirection} video=${entry.videoTransceiver.currentDirection}`
+        );
         entry.statsTimer = setInterval(() => this.logStats(peerId), 5000);
       }
       if (pc.connectionState === "failed") {
@@ -191,12 +194,26 @@ export class WebRTCManager {
         const audioTrack = stream?.getAudioTracks()[0] ?? null;
         const videoTrack = stream?.getVideoTracks()[0] ?? null;
 
+        const prevAudio = entry.audioTransceiver.sender.track;
+        const prevVideo = entry.videoTransceiver.sender.track;
+
         await entry.audioTransceiver.sender.replaceTrack(audioTrack);
         await entry.videoTransceiver.sender.replaceTrack(videoTrack);
 
         console.log(
           `[webrtc] sending to ${peerId}: audio=${!!audioTrack} video=${!!videoTrack}`
         );
+
+        // Renegotiate when a track is added or removed so the SDP carries the
+        // new SSRC/msid. Modern perfect negotiation handles glare if the other
+        // side renegotiates at the same time.
+        const trackChanged =
+          (audioTrack ? audioTrack.id : null) !== (prevAudio ? prevAudio.id : null) ||
+          (videoTrack ? videoTrack.id : null) !== (prevVideo ? prevVideo.id : null);
+
+        if (trackChanged) {
+          await this.negotiate(peerId);
+        }
       } catch (err) {
         console.warn(`[webrtc] replaceTrack failed for ${peerId}:`, err);
       }
