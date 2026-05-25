@@ -10,6 +10,8 @@ interface PeerEntry {
   videoTransceiver: RTCRtpTransceiver;
   remoteStream: MediaStream;
   statsTimer?: ReturnType<typeof setInterval>;
+  isSettingRemoteAnswerPending: boolean;
+  ignoreOffer: boolean;
 }
 
 export type ConnectionState = "new" | "connecting" | "connected" | "failed";
@@ -83,7 +85,14 @@ export class WebRTCManager {
     const videoTransceiver = pc.addTransceiver("video", { direction: "sendrecv" });
     const remoteStream = new MediaStream();
 
-    const entry: PeerEntry = { pc, audioTransceiver, videoTransceiver, remoteStream };
+    const entry: PeerEntry = {
+      pc,
+      audioTransceiver,
+      videoTransceiver,
+      remoteStream,
+      isSettingRemoteAnswerPending: false,
+      ignoreOffer: false,
+    };
     this.peers.set(peerId, entry);
 
     pc.onicecandidate = (event) => {
@@ -121,6 +130,9 @@ export class WebRTCManager {
       };
       incoming.onmute = () => {
         console.log(`[webrtc] ${peerId} ${incoming.kind} muted`);
+      };
+      incoming.onended = () => {
+        console.log(`[webrtc] ${peerId} ${incoming.kind} ended`);
       };
 
       console.log(
@@ -185,8 +197,6 @@ export class WebRTCManager {
         console.log(
           `[webrtc] sending to ${peerId}: audio=${!!audioTrack} video=${!!videoTrack}`
         );
-
-        await this.negotiate(peerId);
       } catch (err) {
         console.warn(`[webrtc] replaceTrack failed for ${peerId}:`, err);
       }
@@ -235,13 +245,13 @@ export class WebRTCManager {
 
     this.makingOffer.add(peerId);
     try {
-      const offer = await pc.createOffer();
-      if (pc.signalingState !== "stable") return;
-      await pc.setLocalDescription(offer);
-      getSocket().emit("webrtc:signal", {
-        to: peerId,
-        signal: offer,
-      });
+      await pc.setLocalDescription();
+      if (pc.localDescription) {
+        getSocket().emit("webrtc:signal", {
+          to: peerId,
+          signal: { type: pc.localDescription.type, sdp: pc.localDescription.sdp },
+        });
+      }
     } catch (err) {
       console.warn(`[webrtc] negotiate failed for ${peerId}:`, err);
     } finally {
@@ -259,7 +269,9 @@ export class WebRTCManager {
       try {
         await entry.pc.addIceCandidate(new RTCIceCandidate(candidate));
       } catch (err) {
-        console.warn(`[webrtc] queued ICE add failed for ${peerId}:`, err);
+        if (!entry.ignoreOffer) {
+          console.warn(`[webrtc] queued ICE add failed for ${peerId}:`, err);
+        }
       }
     }
   }
@@ -277,24 +289,28 @@ export class WebRTCManager {
 
     if ("type" in signal && (signal.type === "offer" || signal.type === "answer")) {
       const polite = !this.shouldInitiate(peerId);
-      const offerCollision =
-        signal.type === "offer" &&
-        (this.makingOffer.has(peerId) || pc.signalingState !== "stable");
+      const readyForOffer =
+        !this.makingOffer.has(peerId) &&
+        (pc.signalingState === "stable" || entry.isSettingRemoteAnswerPending);
+      const offerCollision = signal.type === "offer" && !readyForOffer;
 
-      if (offerCollision && !polite) {
+      entry.ignoreOffer = !polite && offerCollision;
+      if (entry.ignoreOffer) {
+        return;
+      }
+
+      if (signal.type === "answer" && pc.signalingState !== "have-local-offer") {
+        // Stale answer for an offer we already rolled back. Drop it to avoid
+        // "Called in wrong state: stable" errors.
         return;
       }
 
       try {
-        if (offerCollision && polite) {
-          await Promise.all([
-            pc.setLocalDescription({ type: "rollback" } as RTCSessionDescriptionInit),
-            pc.setRemoteDescription(new RTCSessionDescription(signal)),
-          ]);
-        } else {
-          await pc.setRemoteDescription(new RTCSessionDescription(signal));
-        }
+        entry.isSettingRemoteAnswerPending = signal.type === "answer";
+        await pc.setRemoteDescription(new RTCSessionDescription(signal));
+        entry.isSettingRemoteAnswerPending = false;
       } catch (err) {
+        entry.isSettingRemoteAnswerPending = false;
         console.warn(`[webrtc] setRemoteDescription failed for ${peerId}:`, err);
         return;
       }
@@ -303,12 +319,13 @@ export class WebRTCManager {
 
       if (signal.type === "offer") {
         try {
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          getSocket().emit("webrtc:signal", {
-            to: peerId,
-            signal: answer,
-          });
+          await pc.setLocalDescription();
+          if (pc.localDescription) {
+            getSocket().emit("webrtc:signal", {
+              to: peerId,
+              signal: { type: pc.localDescription.type, sdp: pc.localDescription.sdp },
+            });
+          }
         } catch (err) {
           console.warn(`[webrtc] answer failed for ${peerId}:`, err);
         }
@@ -316,7 +333,7 @@ export class WebRTCManager {
       return;
     }
 
-    if ("candidate" in signal && signal.candidate) {
+    if ("candidate" in signal) {
       if (!pc.remoteDescription) {
         const queue = this.pendingCandidates.get(peerId) ?? [];
         queue.push(signal);
@@ -326,7 +343,9 @@ export class WebRTCManager {
       try {
         await pc.addIceCandidate(new RTCIceCandidate(signal));
       } catch (err) {
-        console.warn(`[webrtc] ICE add failed for ${peerId}:`, err);
+        if (!entry.ignoreOffer) {
+          console.warn(`[webrtc] ICE add failed for ${peerId}:`, err);
+        }
       }
     }
   }
@@ -339,6 +358,7 @@ export class WebRTCManager {
       this.peers.delete(peerId);
     }
     this.pendingCandidates.delete(peerId);
+    this.makingOffer.delete(peerId);
     this.onRemoteStream?.(peerId, null);
     this.onPeerState?.(peerId, "failed");
   }
