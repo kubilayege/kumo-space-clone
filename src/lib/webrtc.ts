@@ -25,6 +25,9 @@ export class WebRTCManager {
   private onPeerState?: (peerId: string, state: ConnectionState) => void;
   private makingOffer = new Set<string>();
   private signalHandler: (payload: { from: string; signal: SignalPayload }) => void;
+  private silentAudioCtx: AudioContext | null = null;
+  private silentAudioTrack: MediaStreamTrack | null = null;
+  private silentVideoTrack: MediaStreamTrack | null = null;
 
   constructor(
     onRemoteStream?: (peerId: string, stream: MediaStream | null) => void,
@@ -36,6 +39,57 @@ export class WebRTCManager {
       void this.handleSignal(payload.from, payload.signal);
     };
     getSocket().on("webrtc:signal", this.signalHandler);
+  }
+
+  // Silent placeholder tracks keep the SDP m-line direction at "sendrecv" on
+  // both sides regardless of whether the user has enabled their mic/cam yet.
+  // Without this, a peer with no local track answers recvonly per JSEP, which
+  // pins the other side to sendonly even after they later toggle their device
+  // on (since their second renegotiation can again find us trackless).
+  private getSilentAudioTrack(): MediaStreamTrack {
+    if (this.silentAudioTrack && this.silentAudioTrack.readyState === "live") {
+      return this.silentAudioTrack;
+    }
+    if (!this.silentAudioCtx) {
+      this.silentAudioCtx = new AudioContext();
+    }
+    const oscillator = this.silentAudioCtx.createOscillator();
+    const dst = this.silentAudioCtx.createMediaStreamDestination();
+    oscillator.connect(dst);
+    oscillator.start();
+    const track = dst.stream.getAudioTracks()[0];
+    track.enabled = false;
+    this.silentAudioTrack = track;
+    return track;
+  }
+
+  private getSilentVideoTrack(): MediaStreamTrack {
+    if (this.silentVideoTrack && this.silentVideoTrack.readyState === "live") {
+      return this.silentVideoTrack;
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = 16;
+    canvas.height = 16;
+    const ctx2d = canvas.getContext("2d");
+    if (ctx2d) {
+      ctx2d.fillStyle = "#000";
+      ctx2d.fillRect(0, 0, 16, 16);
+    }
+    const stream = (canvas as HTMLCanvasElement & {
+      captureStream: (frameRate?: number) => MediaStream;
+    }).captureStream(1);
+    const track = stream.getVideoTracks()[0];
+    track.enabled = false;
+    this.silentVideoTrack = track;
+    return track;
+  }
+
+  private resolveAudioTrack(): MediaStreamTrack {
+    return this.localStream?.getAudioTracks()[0] ?? this.getSilentAudioTrack();
+  }
+
+  private resolveVideoTrack(): MediaStreamTrack {
+    return this.localStream?.getVideoTracks()[0] ?? this.getSilentVideoTrack();
   }
 
   private shouldInitiate(peerId: string): boolean {
@@ -165,14 +219,8 @@ export class WebRTCManager {
       void this.negotiate(peerId);
     };
 
-    if (this.localStream) {
-      await audioTransceiver.sender.replaceTrack(
-        this.localStream.getAudioTracks()[0] ?? null
-      );
-      await videoTransceiver.sender.replaceTrack(
-        this.localStream.getVideoTracks()[0] ?? null
-      );
-    }
+    await audioTransceiver.sender.replaceTrack(this.resolveAudioTrack());
+    await videoTransceiver.sender.replaceTrack(this.resolveVideoTrack());
 
     if (!skipInitialOffer && this.shouldInitiate(peerId)) {
       await this.negotiate(peerId);
@@ -191,29 +239,15 @@ export class WebRTCManager {
 
     for (const [peerId, entry] of this.peers) {
       try {
-        const audioTrack = stream?.getAudioTracks()[0] ?? null;
-        const videoTrack = stream?.getVideoTracks()[0] ?? null;
-
-        const prevAudio = entry.audioTransceiver.sender.track;
-        const prevVideo = entry.videoTransceiver.sender.track;
+        const audioTrack = this.resolveAudioTrack();
+        const videoTrack = this.resolveVideoTrack();
 
         await entry.audioTransceiver.sender.replaceTrack(audioTrack);
         await entry.videoTransceiver.sender.replaceTrack(videoTrack);
 
         console.log(
-          `[webrtc] sending to ${peerId}: audio=${!!audioTrack} video=${!!videoTrack}`
+          `[webrtc] sending to ${peerId}: audio=${!!stream?.getAudioTracks()[0]} video=${!!stream?.getVideoTracks()[0]}`
         );
-
-        // Renegotiate when a track is added or removed so the SDP carries the
-        // new SSRC/msid. Modern perfect negotiation handles glare if the other
-        // side renegotiates at the same time.
-        const trackChanged =
-          (audioTrack ? audioTrack.id : null) !== (prevAudio ? prevAudio.id : null) ||
-          (videoTrack ? videoTrack.id : null) !== (prevVideo ? prevVideo.id : null);
-
-        if (trackChanged) {
-          await this.negotiate(peerId);
-        }
       } catch (err) {
         console.warn(`[webrtc] replaceTrack failed for ${peerId}:`, err);
       }
@@ -391,5 +425,11 @@ export class WebRTCManager {
     for (const peerId of [...this.peers.keys()]) {
       this.removePeer(peerId);
     }
+    this.silentAudioTrack?.stop();
+    this.silentVideoTrack?.stop();
+    this.silentAudioTrack = null;
+    this.silentVideoTrack = null;
+    void this.silentAudioCtx?.close().catch(() => {});
+    this.silentAudioCtx = null;
   }
 }
