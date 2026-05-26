@@ -9,6 +9,8 @@ export interface User {
   status: UserStatus;
   micEnabled: boolean;
   cameraEnabled: boolean;
+  screenSharing: boolean;
+  screenAudioEnabled: boolean;
 }
 
 export interface ChatMessage {
@@ -20,6 +22,28 @@ export interface ChatMessage {
   scope: "nearby" | "floor" | "all";
   timestamp: number;
   zoneId?: string;
+}
+
+export type ChatScope = "nearby" | "floor" | "all";
+
+export interface TypingEvent {
+  userId: string;
+  userName: string;
+  userColor: string;
+  scope: ChatScope;
+  zoneId?: string;
+}
+
+export interface TypingStopEvent {
+  userId: string;
+}
+
+export interface TypingUser {
+  userId: string;
+  userName: string;
+  userColor: string;
+  scope: ChatScope;
+  expiresAt: number;
 }
 
 export interface RoomZone {
@@ -53,6 +77,8 @@ export const AVATAR_COLORS = [
 ];
 
 export const AUDIO_RANGE = 180;
+export const SCREEN_SHARE_RANGE = 300;
+export const SCREEN_SHARE_VISIBLE_THRESHOLD = 0.06;
 export const NEARBY_CHAT_RANGE = 220;
 export const MOVE_SPEED = 4;
 
@@ -174,6 +200,52 @@ export function getInitials(name: string): string {
 
 export function distance(a: { x: number; y: number }, b: { x: number; y: number }): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+export function isNearby(
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+  range: number = AUDIO_RANGE
+): boolean {
+  return distance(a, b) <= range;
+}
+
+export function isWithinScreenShareRange(
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+  range: number = SCREEN_SHARE_RANGE
+): boolean {
+  return distance(a, b) <= range;
+}
+
+export function getScreenSharePresence(
+  distancePx: number,
+  range: number = SCREEN_SHARE_RANGE
+): number {
+  if (distancePx >= range) return 0;
+  const t = 1 - distancePx / range;
+  return Math.pow(t, 1.15);
+}
+
+export function shouldConnectPeer(localUser: User, peer: User): boolean {
+  if (peer.id === localUser.id) return false;
+  if (isNearby(localUser, peer)) return true;
+  return peer.screenSharing && isWithinScreenShareRange(localUser, peer);
+}
+
+export function hasNearbyPresenter(
+  localUser: User,
+  users: User[],
+  localScreenSharing: boolean
+): boolean {
+  if (localScreenSharing) return true;
+  return users.some((user) => {
+    if (!user.screenSharing || user.id === localUser.id) return false;
+    return (
+      getScreenSharePresence(distance(localUser, user)) >
+      SCREEN_SHARE_VISIBLE_THRESHOLD
+    );
+  });
 }
 
 export function clampPosition(x: number, y: number, map: OfficeMap): { x: number; y: number } {

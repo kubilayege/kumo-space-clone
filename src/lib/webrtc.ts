@@ -1,12 +1,14 @@
 "use client";
 
+import { classifyAudioTrack } from "./screenShare";
 import { getSocket } from "./socket";
 
 type SignalPayload = RTCSessionDescriptionInit | RTCIceCandidateInit;
 
 interface PeerEntry {
   pc: RTCPeerConnection;
-  audioTransceiver: RTCRtpTransceiver;
+  micTransceiver: RTCRtpTransceiver;
+  screenAudioTransceiver: RTCRtpTransceiver;
   videoTransceiver: RTCRtpTransceiver;
   remoteStream: MediaStream;
   statsTimer?: ReturnType<typeof setInterval>;
@@ -25,9 +27,8 @@ export class WebRTCManager {
   private onPeerState?: (peerId: string, state: ConnectionState) => void;
   private makingOffer = new Set<string>();
   private signalHandler: (payload: { from: string; signal: SignalPayload }) => void;
-  private silentAudioCtx: AudioContext | null = null;
-  private silentAudioTrack: MediaStreamTrack | null = null;
   private silentVideoTrack: MediaStreamTrack | null = null;
+  private screenShareEncoding: { maxBitrate: number; maxFramerate: number } | null = null;
 
   constructor(
     onRemoteStream?: (peerId: string, stream: MediaStream | null) => void,
@@ -46,23 +47,6 @@ export class WebRTCManager {
   // Without this, a peer with no local track answers recvonly per JSEP, which
   // pins the other side to sendonly even after they later toggle their device
   // on (since their second renegotiation can again find us trackless).
-  private getSilentAudioTrack(): MediaStreamTrack {
-    if (this.silentAudioTrack && this.silentAudioTrack.readyState === "live") {
-      return this.silentAudioTrack;
-    }
-    if (!this.silentAudioCtx) {
-      this.silentAudioCtx = new AudioContext();
-    }
-    const oscillator = this.silentAudioCtx.createOscillator();
-    const dst = this.silentAudioCtx.createMediaStreamDestination();
-    oscillator.connect(dst);
-    oscillator.start();
-    const track = dst.stream.getAudioTracks()[0];
-    track.enabled = false;
-    this.silentAudioTrack = track;
-    return track;
-  }
-
   private getSilentVideoTrack(): MediaStreamTrack {
     if (this.silentVideoTrack && this.silentVideoTrack.readyState === "live") {
       return this.silentVideoTrack;
@@ -79,13 +63,26 @@ export class WebRTCManager {
       captureStream: (frameRate?: number) => MediaStream;
     }).captureStream(1);
     const track = stream.getVideoTracks()[0];
-    track.enabled = false;
+    track.enabled = true;
     this.silentVideoTrack = track;
     return track;
   }
 
-  private resolveAudioTrack(): MediaStreamTrack {
-    return this.localStream?.getAudioTracks()[0] ?? this.getSilentAudioTrack();
+  // Returns the first live, enabled audio track of the given semantic kind.
+  // We classify by contentHint so that mic and screen audio land on dedicated
+  // transceivers and are kept separate end-to-end.
+  private resolveAudioTrackFor(kind: "mic" | "screen"): MediaStreamTrack | null {
+    if (!this.localStream) return null;
+    return (
+      this.localStream
+        .getAudioTracks()
+        .find(
+          (track) =>
+            track.readyState === "live" &&
+            track.enabled &&
+            classifyAudioTrack(track) === kind
+        ) ?? null
+    );
   }
 
   private resolveVideoTrack(): MediaStreamTrack {
@@ -95,6 +92,29 @@ export class WebRTCManager {
   private shouldInitiate(peerId: string): boolean {
     if (!this.localPeerId) return false;
     return this.localPeerId.localeCompare(peerId) < 0;
+  }
+
+  private async ensureSendRecv(peerId: string) {
+    const entry = this.peers.get(peerId);
+    if (!entry || entry.pc.signalingState !== "stable") return;
+
+    let changed = false;
+    if (entry.micTransceiver.direction !== "sendrecv") {
+      entry.micTransceiver.direction = "sendrecv";
+      changed = true;
+    }
+    if (entry.screenAudioTransceiver.direction !== "sendrecv") {
+      entry.screenAudioTransceiver.direction = "sendrecv";
+      changed = true;
+    }
+    if (entry.videoTransceiver.direction !== "sendrecv") {
+      entry.videoTransceiver.direction = "sendrecv";
+      changed = true;
+    }
+
+    if (changed) {
+      await this.negotiate(peerId);
+    }
   }
 
   private rtcConfig(): RTCConfiguration {
@@ -135,13 +155,18 @@ export class WebRTCManager {
 
   private async createPeerConnection(peerId: string, skipInitialOffer = false) {
     const pc = new RTCPeerConnection(this.rtcConfig());
-    const audioTransceiver = pc.addTransceiver("audio", { direction: "sendrecv" });
+    // First audio transceiver carries the microphone, second carries screen
+    // audio. Keeping them on separate m-sections lets receivers mute one
+    // without affecting the other.
+    const micTransceiver = pc.addTransceiver("audio", { direction: "sendrecv" });
+    const screenAudioTransceiver = pc.addTransceiver("audio", { direction: "sendrecv" });
     const videoTransceiver = pc.addTransceiver("video", { direction: "sendrecv" });
     const remoteStream = new MediaStream();
 
     const entry: PeerEntry = {
       pc,
-      audioTransceiver,
+      micTransceiver,
+      screenAudioTransceiver,
       videoTransceiver,
       remoteStream,
       isSettingRemoteAnswerPending: false,
@@ -166,14 +191,50 @@ export class WebRTCManager {
 
     pc.ontrack = (event) => {
       const incoming = event.track;
-      const sameKind = entry.remoteStream
-        .getTracks()
-        .filter((t) => t.kind === incoming.kind);
-      for (const existing of sameKind) {
-        if (existing.id !== incoming.id) entry.remoteStream.removeTrack(existing);
+      // For audio we replace the previous track on the *same transceiver*
+      // (i.e. same m-line) when SSRCs change, while still allowing the two
+      // audio transceivers to coexist. Video stays single-track so we keep
+      // the kind-based dedupe for it.
+      if (incoming.kind === "video") {
+        const sameKind = entry.remoteStream
+          .getTracks()
+          .filter((t) => t.kind === incoming.kind);
+        for (const existing of sameKind) {
+          if (existing.id !== incoming.id) entry.remoteStream.removeTrack(existing);
+        }
+      } else if (incoming.kind === "audio") {
+        const receiver = event.receiver;
+        for (const existing of entry.remoteStream.getAudioTracks()) {
+          if (existing.id === incoming.id) continue;
+          // Heuristic: drop tracks attached to the same transceiver/receiver
+          // (means the SSRC for that mid was replaced).
+          const isSameReceiver = entry.pc
+            .getReceivers()
+            .some((r) => r === receiver && r.track?.id === existing.id);
+          if (isSameReceiver) {
+            entry.remoteStream.removeTrack(existing);
+          }
+        }
       }
       if (!entry.remoteStream.getTracks().some((t) => t.id === incoming.id)) {
         entry.remoteStream.addTrack(incoming);
+      }
+
+      // Reflect the sender's contentHint on the receiver side as well so
+      // downstream components can identify mic vs screen audio cleanly.
+      if (incoming.kind === "audio") {
+        const transceiver = event.transceiver;
+        const inferredHint =
+          transceiver === entry.screenAudioTransceiver
+            ? "music"
+            : transceiver === entry.micTransceiver
+              ? "speech"
+              : incoming.contentHint;
+        try {
+          incoming.contentHint = inferredHint;
+        } catch {
+          // ignore
+        }
       }
 
       publishStream();
@@ -190,7 +251,7 @@ export class WebRTCManager {
       };
 
       console.log(
-        `[webrtc] track from ${peerId}: kind=${incoming.kind} muted=${incoming.muted} state=${incoming.readyState}`
+        `[webrtc] track from ${peerId}: kind=${incoming.kind} hint=${incoming.contentHint} muted=${incoming.muted} state=${incoming.readyState}`
       );
     };
 
@@ -199,8 +260,10 @@ export class WebRTCManager {
       this.onPeerState?.(peerId, this.mapState(pc.connectionState));
       if (pc.connectionState === "connected" && !entry.statsTimer) {
         console.log(
-          `[webrtc] ${peerId} directions: audio=${entry.audioTransceiver.currentDirection} video=${entry.videoTransceiver.currentDirection}`
+          `[webrtc] ${peerId} directions: mic=${entry.micTransceiver.currentDirection} screen=${entry.screenAudioTransceiver.currentDirection} video=${entry.videoTransceiver.currentDirection}`
         );
+        void this.ensureSendRecv(peerId);
+        void this.applyVideoEncoding(peerId, entry);
         entry.statsTimer = setInterval(() => this.logStats(peerId), 5000);
       }
       if (pc.connectionState === "failed") {
@@ -219,7 +282,10 @@ export class WebRTCManager {
       void this.negotiate(peerId);
     };
 
-    await audioTransceiver.sender.replaceTrack(this.resolveAudioTrack());
+    await micTransceiver.sender.replaceTrack(this.resolveAudioTrackFor("mic"));
+    await screenAudioTransceiver.sender.replaceTrack(
+      this.resolveAudioTrackFor("screen")
+    );
     await videoTransceiver.sender.replaceTrack(this.resolveVideoTrack());
 
     if (!skipInitialOffer && this.shouldInitiate(peerId)) {
@@ -234,20 +300,59 @@ export class WebRTCManager {
     return "new";
   }
 
+  async setScreenShareEncoding(
+    encoding: { maxBitrate: number; maxFramerate: number } | null
+  ) {
+    this.screenShareEncoding = encoding;
+    for (const [peerId, entry] of this.peers) {
+      await this.applyVideoEncoding(peerId, entry);
+    }
+  }
+
+  private async applyVideoEncoding(peerId: string, entry: PeerEntry) {
+    if (!this.screenShareEncoding) return;
+
+    const sender = entry.videoTransceiver.sender;
+    if (!sender.track || sender.track.kind !== "video") return;
+
+    const params = sender.getParameters();
+    const encodings = params.encodings?.length ? [...params.encodings] : [{}];
+    encodings[0] = {
+      ...encodings[0],
+      maxBitrate: this.screenShareEncoding.maxBitrate,
+      maxFramerate: this.screenShareEncoding.maxFramerate,
+    };
+    params.encodings = encodings;
+
+    try {
+      await sender.setParameters(params);
+    } catch (err) {
+      console.warn(`[webrtc] video encoding failed for ${peerId}:`, err);
+    }
+  }
+
   async setLocalStream(stream: MediaStream | null) {
     this.localStream = stream;
 
     for (const [peerId, entry] of this.peers) {
       try {
-        const audioTrack = this.resolveAudioTrack();
+        const micTrack = this.resolveAudioTrackFor("mic");
+        const screenAudioTrack = this.resolveAudioTrackFor("screen");
         const videoTrack = this.resolveVideoTrack();
 
-        await entry.audioTransceiver.sender.replaceTrack(audioTrack);
+        await entry.micTransceiver.sender.replaceTrack(micTrack);
+        await entry.screenAudioTransceiver.sender.replaceTrack(screenAudioTrack);
         await entry.videoTransceiver.sender.replaceTrack(videoTrack);
 
         console.log(
-          `[webrtc] sending to ${peerId}: audio=${!!stream?.getAudioTracks()[0]} video=${!!stream?.getVideoTracks()[0]}`
+          `[webrtc] sending to ${peerId}: mic=${!!micTrack} screen=${!!screenAudioTrack} video=${!!stream?.getVideoTracks()[0]} directions mic=${entry.micTransceiver.currentDirection} screen=${entry.screenAudioTransceiver.currentDirection} video=${entry.videoTransceiver.currentDirection}`
         );
+
+        await this.applyVideoEncoding(peerId, entry);
+
+        if (entry.pc.signalingState === "stable") {
+          await this.ensureSendRecv(peerId);
+        }
       } catch (err) {
         console.warn(`[webrtc] replaceTrack failed for ${peerId}:`, err);
       }
@@ -384,8 +489,9 @@ export class WebRTCManager {
 
       if (pc.signalingState === "stable") {
         console.log(
-          `[webrtc] ${peerId} directions: audio=${entry.audioTransceiver.currentDirection} video=${entry.videoTransceiver.currentDirection}`
+          `[webrtc] ${peerId} directions: mic=${entry.micTransceiver.currentDirection} screen=${entry.screenAudioTransceiver.currentDirection} video=${entry.videoTransceiver.currentDirection}`
         );
+        await this.ensureSendRecv(peerId);
       }
       return;
     }
@@ -425,11 +531,7 @@ export class WebRTCManager {
     for (const peerId of [...this.peers.keys()]) {
       this.removePeer(peerId);
     }
-    this.silentAudioTrack?.stop();
     this.silentVideoTrack?.stop();
-    this.silentAudioTrack = null;
     this.silentVideoTrack = null;
-    void this.silentAudioCtx?.close().catch(() => {});
-    this.silentAudioCtx = null;
   }
 }

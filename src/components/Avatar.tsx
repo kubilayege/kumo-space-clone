@@ -1,13 +1,14 @@
 "use client";
 
 import clsx from "clsx";
-import { Camera, Mic, MicOff } from "lucide-react";
+import { Camera, Mic, MicOff, Monitor } from "lucide-react";
 import { User, getInitials } from "@/lib/types";
 
 interface AvatarProps {
   user: User;
   isLocal?: boolean;
   isSpeaking?: boolean;
+  isPresenting?: boolean;
   zoneName?: string;
   size?: "sm" | "md" | "lg";
 }
@@ -28,6 +29,7 @@ export function Avatar({
   user,
   isLocal = false,
   isSpeaking = false,
+  isPresenting = false,
   zoneName,
   size = "md",
 }: AvatarProps) {
@@ -44,6 +46,10 @@ export function Avatar({
         {/* Speaking ring (animated) */}
         {isSpeaking && (
           <span className="absolute inset-0 -m-1 rounded-full ring-2 ring-emerald-400/70 speak-pulse" />
+        )}
+
+        {isPresenting && (
+          <span className="absolute inset-0 -m-1 rounded-full ring-2 ring-violet-400/70" />
         )}
 
         {/* Avatar body */}
@@ -91,6 +97,9 @@ export function Avatar({
             <MicOff className="h-3 w-3 text-zinc-500" strokeWidth={2.5} />
           )}
           {user.cameraEnabled && <Camera className="h-3 w-3 text-emerald-400" strokeWidth={2.5} />}
+          {user.screenSharing && (
+            <Monitor className="h-3 w-3 text-violet-300" strokeWidth={2.5} />
+          )}
         </span>
       </div>
 

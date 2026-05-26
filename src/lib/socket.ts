@@ -1,6 +1,7 @@
 "use client";
 
 import { io, Socket } from "socket.io-client";
+import { DrawStroke } from "./annotations";
 import { ChatMessage, User } from "./types";
 
 let socket: Socket | null = null;
@@ -19,7 +20,7 @@ export function joinSpace(
   spaceId: string,
   name: string,
   color?: string
-): Promise<{ user: User; users: User[]; messages: ChatMessage[] }> {
+): Promise<{ user: User; users: User[]; messages: ChatMessage[]; annotations: DrawStroke[] }> {
   const client = getSocket();
 
   return new Promise((resolve, reject) => {
@@ -30,7 +31,12 @@ export function joinSpace(
     client.emit(
       "space:join",
       { spaceId, name, color },
-      (response: { user: User; users: User[]; messages: ChatMessage[] }) => {
+      (response: {
+        user: User;
+        users: User[];
+        messages: ChatMessage[];
+        annotations: DrawStroke[];
+      }) => {
         if (response?.user) {
           resolve(response);
         } else {

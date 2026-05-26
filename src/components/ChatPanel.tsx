@@ -10,16 +10,19 @@ import {
   Send,
   Sparkles,
 } from "lucide-react";
-import { ChatMessage, RoomZone, getInitials } from "@/lib/types";
-
-type ChatScope = "nearby" | "floor" | "all";
+import { getSocket } from "@/lib/socket";
+import { ChatMessage, ChatScope, RoomZone, TypingUser, getInitials } from "@/lib/types";
 
 interface ChatPanelProps {
   messages: ChatMessage[];
   onSend: (text: string, scope: ChatScope) => void;
   currentUserId?: string;
   currentZone?: RoomZone | null;
+  typingUsers?: TypingUser[];
 }
+
+const TYPING_EMIT_THROTTLE_MS = 1500;
+const TYPING_IDLE_TIMEOUT_MS = 3000;
 
 const SCOPES: {
   value: ChatScope;
@@ -112,31 +115,94 @@ function isSameGroup(current: ChatMessage, previous?: ChatMessage) {
   );
 }
 
-function TypingIndicator() {
+function formatTypingLabel(typers: TypingUser[]): string {
+  if (typers.length === 0) return "";
+  if (typers.length === 1) return `${typers[0].userName} is typing…`;
+  if (typers.length === 2) return `${typers[0].userName} and ${typers[1].userName} are typing…`;
+  const remaining = typers.length - 2;
+  return `${typers[0].userName}, ${typers[1].userName}, and ${remaining} ${remaining === 1 ? "other" : "others"} are typing…`;
+}
+
+function TypingIndicator({ typers }: { typers: TypingUser[] }) {
+  if (typers.length === 0) return null;
+  const visible = typers.slice(0, 3);
   return (
     <div className="flex items-center gap-2 px-1 py-1">
-      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white/[0.06]">
-        <span className="flex gap-0.5">
-          <span className="h-1 w-1 animate-bounce rounded-full bg-indigo-400/80 [animation-delay:0ms]" />
-          <span className="h-1 w-1 animate-bounce rounded-full bg-indigo-400/80 [animation-delay:150ms]" />
-          <span className="h-1 w-1 animate-bounce rounded-full bg-indigo-400/80 [animation-delay:300ms]" />
-        </span>
+      <div className="flex -space-x-1.5">
+        {visible.map((typer) => (
+          <span
+            key={typer.userId}
+            title={typer.userName}
+            className="flex h-5 w-5 items-center justify-center rounded-full text-[8px] font-semibold text-white ring-2 ring-[#0a0a14]"
+            style={{ backgroundColor: typer.userColor }}
+          >
+            {getInitials(typer.userName)}
+          </span>
+        ))}
       </div>
-      <span className="text-[11px] text-zinc-500">Someone is typing</span>
+      <span className="flex gap-0.5">
+        <span className="h-1 w-1 animate-bounce rounded-full bg-indigo-400/80 [animation-delay:0ms]" />
+        <span className="h-1 w-1 animate-bounce rounded-full bg-indigo-400/80 [animation-delay:150ms]" />
+        <span className="h-1 w-1 animate-bounce rounded-full bg-indigo-400/80 [animation-delay:300ms]" />
+      </span>
+      <span className="truncate text-[11px] text-zinc-500">{formatTypingLabel(typers)}</span>
     </div>
   );
 }
 
-export function ChatPanel({ messages, onSend, currentUserId, currentZone }: ChatPanelProps) {
+export function ChatPanel({
+  messages,
+  onSend,
+  currentUserId,
+  currentZone,
+  typingUsers = [],
+}: ChatPanelProps) {
   const [text, setText] = useState("");
   const [scope, setScope] = useState<ChatScope>(() => defaultScopeForZone(currentZone));
   const [zoneFlash, setZoneFlash] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const prevZoneIdRef = useRef<string | null | undefined>(undefined);
 
+  // Typing-emit bookkeeping.
+  const lastTypingEmitRef = useRef(0);
+  const idleStopTimerRef = useRef<number | null>(null);
+  const isTypingRef = useRef(false);
+  const currentScopeRef = useRef<ChatScope>(scope);
+
+  const clearIdleStopTimer = () => {
+    if (idleStopTimerRef.current !== null) {
+      window.clearTimeout(idleStopTimerRef.current);
+      idleStopTimerRef.current = null;
+    }
+  };
+
+  const emitTypingStop = (scopeToStop: ChatScope) => {
+    if (!isTypingRef.current) return;
+    isTypingRef.current = false;
+    lastTypingEmitRef.current = 0;
+    clearIdleStopTimer();
+    getSocket().emit("chat:typing:stop", { scope: scopeToStop });
+  };
+
+  // Keep the ref in sync; when scope changes, stop typing in the previous scope.
+  useEffect(() => {
+    const previousScope = currentScopeRef.current;
+    if (previousScope !== scope) {
+      emitTypingStop(previousScope);
+    }
+    currentScopeRef.current = scope;
+  }, [scope]);
+
+  // Stop typing on unmount.
+  useEffect(() => {
+    return () => {
+      emitTypingStop(currentScopeRef.current);
+    };
+  }, []);
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, typingUsers]);
 
   useEffect(() => {
     const zoneId = currentZone?.id ?? null;
@@ -150,14 +216,47 @@ export function ChatPanel({ messages, onSend, currentUserId, currentZone }: Chat
     prevZoneIdRef.current = zoneId;
   }, [currentZone]);
 
+  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const nextText = event.target.value;
+    setText(nextText);
+
+    if (!nextText.trim()) {
+      emitTypingStop(scope);
+      return;
+    }
+
+    const now = Date.now();
+    if (now - lastTypingEmitRef.current >= TYPING_EMIT_THROTTLE_MS) {
+      lastTypingEmitRef.current = now;
+      isTypingRef.current = true;
+      getSocket().emit("chat:typing", { scope });
+    }
+
+    clearIdleStopTimer();
+    idleStopTimerRef.current = window.setTimeout(() => {
+      emitTypingStop(scope);
+    }, TYPING_IDLE_TIMEOUT_MS);
+  };
+
+  const handleInputBlur = () => {
+    emitTypingStop(scope);
+  };
+
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
     if (!text.trim()) return;
     onSend(text, scope);
     setText("");
+    emitTypingStop(scope);
   };
 
   const activeScope = SCOPES.find((option) => option.value === scope);
+
+  // Only show typers whose declared scope matches the current scope tab.
+  // (Sender's intent — where they're typing into — is what matters here.)
+  const visibleTypers = typingUsers.filter(
+    (typer) => typer.userId !== currentUserId && typer.scope === scope
+  );
 
   return (
     <div className="flex h-full flex-col">
@@ -368,9 +467,11 @@ export function ChatPanel({ messages, onSend, currentUserId, currentZone }: Chat
               );
             })}
 
-            <div className="mt-3">
-              <TypingIndicator />
-            </div>
+          </div>
+        )}
+        {visibleTypers.length > 0 && (
+          <div className="mt-3">
+            <TypingIndicator typers={visibleTypers} />
           </div>
         )}
         <div ref={bottomRef} />
@@ -388,7 +489,8 @@ export function ChatPanel({ messages, onSend, currentUserId, currentZone }: Chat
           <div className="flex items-center gap-2 rounded-[15px] bg-[#0a0a14]/95 px-3 py-2 backdrop-blur-sm">
             <input
               value={text}
-              onChange={(event) => setText(event.target.value)}
+              onChange={handleInputChange}
+              onBlur={handleInputBlur}
               placeholder={placeholderForScope(scope, currentZone)}
               className="flex-1 bg-transparent text-[13px] text-white placeholder:text-zinc-600 focus:outline-none"
             />

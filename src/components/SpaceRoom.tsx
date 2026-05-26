@@ -3,22 +3,51 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import clsx from "clsx";
-import { Copy, Users, X } from "lucide-react";
+import { Copy, Monitor, MonitorOff, PhoneOff, Users, X } from "lucide-react";
 import { ChatPanel } from "@/components/ChatPanel";
 import { ControlBar } from "@/components/ControlBar";
 import { OfficeCanvas } from "@/components/OfficeCanvas";
 import { SpatialAudio } from "@/components/SpatialAudio";
+import { BroadcastPreview } from "@/components/BroadcastPreview";
+import { ResizableSidebar } from "@/components/ResizableSidebar";
 import { VideoGrid } from "@/components/VideoGrid";
 import { disconnectSocket, getSocket, joinSpace } from "@/lib/socket";
 import {
   ChatMessage,
   DEFAULT_OFFICE,
   MOVE_SPEED,
+  TypingEvent,
+  TypingStopEvent,
+  TypingUser,
   User,
   UserStatus,
   clampPosition,
   getZoneAt,
+  hasNearbyPresenter,
+  shouldConnectPeer,
 } from "@/lib/types";
+import {
+  ScreenShareSurface,
+  captureDisplay,
+  clearVideoTracks,
+  setStreamAudioTracks,
+  swapVideoTrack,
+  tagMicTrack,
+  tagScreenAudioTrack,
+} from "@/lib/screenShare";
+import {
+  ANNOTATION_COLORS,
+  DrawStroke,
+  strokesToMap,
+} from "@/lib/annotations";
+import {
+  ScreenShareQualityId,
+  applyScreenTrackConstraints,
+  getScreenShareQualityPreset,
+  loadScreenShareQuality,
+  saveScreenShareQuality,
+} from "@/lib/screenShareQuality";
+import { liveTrack, stopMediaStream, stopMediaTrack } from "@/lib/mediaSession";
 import { ConnectionState, WebRTCManager } from "@/lib/webrtc";
 
 interface SpaceRoomProps {
@@ -39,20 +68,195 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [micEnabled, setMicEnabled] = useState(false);
   const [cameraEnabled, setCameraEnabled] = useState(false);
+  const [screenSharing, setScreenSharing] = useState(false);
+  const [screenShareQuality, setScreenShareQuality] =
+    useState<ScreenShareQualityId>("balanced");
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStreams, setRemoteStreams] = useState<Map<string, MediaStream>>(new Map());
   const [peerStates, setPeerStates] = useState<Map<string, ConnectionState>>(new Map());
   const [copied, setCopied] = useState(false);
+  const [typingUsers, setTypingUsers] = useState<Map<string, TypingUser>>(new Map());
+  const [peerMicMuted, setPeerMicMuted] = useState<Set<string>>(() => new Set());
+  const [peerScreenAudioMuted, setPeerScreenAudioMuted] = useState<Set<string>>(
+    () => new Set()
+  );
+  const [annotations, setAnnotations] = useState<Map<string, DrawStroke[]>>(new Map());
+  const [annotationColor, setAnnotationColor] = useState(ANNOTATION_COLORS[0]);
+  const [annotateDrawing, setAnnotateDrawing] = useState(false);
+  const [mediaError, setMediaError] = useState<string | null>(null);
+  const [broadcastPreviewOpen, setBroadcastPreviewOpen] = useState(true);
 
   const keysPressed = useRef(new Set<string>());
   const positionRef = useRef({ x: 600, y: 440 });
   const webrtcRef = useRef<WebRTCManager | null>(null);
+  const displayStreamRef = useRef<MediaStream | null>(null);
+  const screenTrackRef = useRef<MediaStreamTrack | null>(null);
+  const displayAudioTrackRef = useRef<MediaStreamTrack | null>(null);
+  const micTrackRef = useRef<MediaStreamTrack | null>(null);
+  const screenSharingRef = useRef(false);
+  const localStreamRef = useRef<MediaStream | null>(null);
   const animationRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    localStreamRef.current = localStream;
+  }, [localStream]);
+
+  useEffect(() => {
+    screenSharingRef.current = screenSharing;
+  }, [screenSharing]);
+
+  useEffect(() => {
+    if (screenSharing) {
+      setAnnotateDrawing(false);
+    }
+  }, [screenSharing]);
+
+  useEffect(() => {
+    setScreenShareQuality(loadScreenShareQuality());
+  }, []);
+
+  const applyScreenEncoding = useCallback(async (qualityId: ScreenShareQualityId) => {
+    const preset = getScreenShareQualityPreset(qualityId);
+    await webrtcRef.current?.setScreenShareEncoding({
+      maxBitrate: preset.maxBitrate,
+      maxFramerate: preset.maxFramerate,
+    });
+  }, []);
+
+  const handleScreenShareQualityChange = useCallback(
+    async (qualityId: ScreenShareQualityId) => {
+      setScreenShareQuality(qualityId);
+      saveScreenShareQuality(qualityId);
+
+      if (!screenSharing) return;
+
+      const preset = getScreenShareQualityPreset(qualityId);
+      if (screenTrackRef.current) {
+        try {
+          await applyScreenTrackConstraints(screenTrackRef.current, preset);
+        } catch {
+          // browser may reject live constraint changes
+        }
+      }
+      await applyScreenEncoding(qualityId);
+    },
+    [applyScreenEncoding, screenSharing]
+  );
+
+  const emitAnnotationStroke = useCallback((stroke: DrawStroke) => {
+    getSocket().emit("annotate:stroke", stroke);
+    setAnnotations((current) => {
+      const next = new Map(current);
+      const list = [...(next.get(stroke.targetId) ?? []), stroke];
+      next.set(stroke.targetId, list);
+      return next;
+    });
+  }, []);
+
+  const emitAnnotationClear = useCallback((targetId: string) => {
+    getSocket().emit("annotate:clear", { targetId });
+    setAnnotations((current) => {
+      const next = new Map(current);
+      next.delete(targetId);
+      return next;
+    });
+  }, []);
+
+  const togglePeerAudioMute = useCallback(
+    (userId: string, kind: "mic" | "screen") => {
+      const setState = kind === "mic" ? setPeerMicMuted : setPeerScreenAudioMuted;
+      setState((current) => {
+        const next = new Set(current);
+        if (next.has(userId)) next.delete(userId);
+        else next.add(userId);
+        return next;
+      });
+    },
+    []
+  );
+
+  // Push the mic + screen-audio tracks onto `stream` as separate tracks (no
+  // mixing). Both are tagged via contentHint so the receiver can route them
+  // independently. If a track shouldn't be sent (mic off, no display audio),
+  // it's simply omitted.
+  const applyShareAudio = useCallback(
+    (stream: MediaStream, displayStream: MediaStream, withMic: boolean) => {
+      const micTrack = micTrackRef.current;
+      if (micTrack) {
+        micTrack.enabled = withMic;
+        tagMicTrack(micTrack);
+      }
+
+      const displayAudio = displayStream.getAudioTracks()[0] ?? null;
+      if (displayAudio) tagScreenAudioTrack(displayAudio);
+      displayAudioTrackRef.current = displayAudio;
+
+      const nextTracks: MediaStreamTrack[] = [];
+      if (micTrack && withMic && micTrack.readyState === "live") {
+        nextTracks.push(micTrack);
+      }
+      if (displayAudio && displayAudio.readyState === "live") {
+        nextTracks.push(displayAudio);
+      }
+
+      setStreamAudioTracks(stream, nextTracks);
+    },
+    []
+  );
 
   const peerIds = useMemo(() => {
     if (!localUser) return [];
-    return users.filter((user) => user.id !== localUser.id).map((user) => user.id);
+    return users
+      .filter((user) => shouldConnectPeer(localUser, user))
+      .map((user) => user.id);
   }, [localUser, users]);
+
+  const anyonePresenting = useMemo(() => {
+    if (!localUser) return screenSharing;
+    return hasNearbyPresenter(localUser, users, screenSharing);
+  }, [localUser, users, screenSharing]);
+
+  const activePresenter = useMemo<User | null>(() => {
+    if (!localUser) return null;
+    if (screenSharing) return localUser;
+    return (
+      users.find((user) => user.id !== localUser.id && user.screenSharing) ?? null
+    );
+  }, [localUser, screenSharing, users]);
+
+  const watcherCount = useMemo(() => {
+    if (!activePresenter) return 0;
+    return users.filter((u) => u.id !== activePresenter.id).length;
+  }, [activePresenter, users]);
+
+  useEffect(() => {
+    if (!anyonePresenting) {
+      setAnnotateDrawing(false);
+    }
+  }, [anyonePresenting]);
+
+  useEffect(() => {
+    if (anyonePresenting) {
+      setSidebarOpen(true);
+    }
+  }, [anyonePresenting]);
+
+  const myStrokes = useMemo(
+    () => (localUser ? (annotations.get(localUser.id) ?? []) : []),
+    [annotations, localUser]
+  );
+  const prevMyStrokeCountRef = useRef(0);
+  useEffect(() => {
+    const count = myStrokes.length;
+    if (!screenSharing) {
+      prevMyStrokeCountRef.current = count;
+      return;
+    }
+    if (count > prevMyStrokeCountRef.current) {
+      setBroadcastPreviewOpen(true);
+    }
+    prevMyStrokeCountRef.current = count;
+  }, [myStrokes, screenSharing]);
 
   const currentZone = useMemo(() => {
     if (!localUser) return null;
@@ -89,12 +293,14 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
     let mounted = true;
 
     joinSpace(spaceId, name, color)
-      .then(({ user, users: initialUsers, messages: initialMessages }) => {
+      .then(({ user, users: initialUsers, messages: initialMessages, annotations: initialAnnotations }) => {
         if (!mounted) return;
         positionRef.current = { x: user.x, y: user.y };
         setLocalUser(user);
+        setScreenSharing(user.screenSharing ?? false);
         setUsers(initialUsers);
         setMessages(initialMessages);
+        setAnnotations(strokesToMap(initialAnnotations ?? []));
         setLoading(false);
       })
       .catch((joinError) => {
@@ -106,7 +312,18 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
     const socket = getSocket();
 
     socket.on("users:update", (updatedUsers: User[]) => {
-      setUsers(updatedUsers);
+      const selfId = getSocket().id;
+      const keepSharing =
+        screenSharingRef.current && liveTrack(screenTrackRef.current);
+      if (!selfId || !keepSharing) {
+        setUsers(updatedUsers);
+        return;
+      }
+      setUsers(
+        updatedUsers.map((user) =>
+          user.id === selfId ? { ...user, screenSharing: true } : user
+        )
+      );
     });
 
     socket.on("user:moved", (payload: { id: string; x: number; y: number }) => {
@@ -118,19 +335,81 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
     });
 
     socket.on("user:updated", (user: User) => {
-      setUsers((current) => current.map((entry) => (entry.id === user.id ? user : entry)));
+      const keepSharing =
+        user.id === socket.id &&
+        screenSharingRef.current &&
+        liveTrack(screenTrackRef.current);
+      const merged =
+        keepSharing && !user.screenSharing ? { ...user, screenSharing: true } : user;
+
+      setUsers((current) =>
+        current.map((entry) => (entry.id === merged.id ? merged : entry))
+      );
       if (user.id === socket.id) {
-        setLocalUser(user);
+        setLocalUser(merged);
+        setScreenSharing(merged.screenSharing ?? false);
       }
     });
 
     socket.on("user:left", (userId: string) => {
       setUsers((current) => current.filter((user) => user.id !== userId));
       webrtcRef.current?.removePeer(userId);
+      setAnnotations((current) => {
+        const next = new Map(current);
+        next.delete(userId);
+        return next;
+      });
+      setTypingUsers((current) => {
+        if (!current.has(userId)) return current;
+        const next = new Map(current);
+        next.delete(userId);
+        return next;
+      });
     });
 
     socket.on("chat:message", (message: ChatMessage) => {
       setMessages((current) => [...current, message]);
+    });
+
+    socket.on("chat:typing", (event: TypingEvent) => {
+      setTypingUsers((current) => {
+        const next = new Map(current);
+        next.set(event.userId, {
+          userId: event.userId,
+          userName: event.userName,
+          userColor: event.userColor,
+          scope: event.scope,
+          expiresAt: Date.now() + 5000,
+        });
+        return next;
+      });
+    });
+
+    socket.on("chat:typing:stop", (event: TypingStopEvent) => {
+      setTypingUsers((current) => {
+        if (!current.has(event.userId)) return current;
+        const next = new Map(current);
+        next.delete(event.userId);
+        return next;
+      });
+    });
+
+    socket.on("annotate:stroke", (stroke: DrawStroke) => {
+      setAnnotations((current) => {
+        const next = new Map(current);
+        const list = next.get(stroke.targetId) ?? [];
+        if (list.some((entry) => entry.id === stroke.id)) return current;
+        next.set(stroke.targetId, [...list, stroke]);
+        return next;
+      });
+    });
+
+    socket.on("annotate:clear", (payload: { targetId: string }) => {
+      setAnnotations((current) => {
+        const next = new Map(current);
+        next.delete(payload.targetId);
+        return next;
+      });
     });
 
     return () => {
@@ -140,9 +419,31 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
       socket.off("user:updated");
       socket.off("user:left");
       socket.off("chat:message");
+      socket.off("chat:typing");
+      socket.off("chat:typing:stop");
+      socket.off("annotate:stroke");
+      socket.off("annotate:clear");
       disconnectSocket();
     };
   }, [spaceId, name, color]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setTypingUsers((current) => {
+        const now = Date.now();
+        let changed = false;
+        const next = new Map(current);
+        for (const [id, entry] of current) {
+          if (entry.expiresAt <= now) {
+            next.delete(id);
+            changed = true;
+          }
+        }
+        return changed ? next : current;
+      });
+    }, 2000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     const socketId = getSocket().id;
@@ -151,21 +452,21 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
     }
   }, [peerIds, localUser]);
 
-  useEffect(() => {
-    const resumeAudio = () => {
-      document.querySelectorAll("video").forEach((element) => {
-        void element.play().catch(() => {});
-      });
-    };
+  const resumeMediaPlayback = useCallback(() => {
+    document.querySelectorAll("video, audio").forEach((element) => {
+      void (element as HTMLMediaElement).play().catch(() => {});
+    });
+  }, []);
 
-    window.addEventListener("pointerdown", resumeAudio);
-    window.addEventListener("keydown", resumeAudio);
+  useEffect(() => {
+    window.addEventListener("pointerdown", resumeMediaPlayback);
+    window.addEventListener("keydown", resumeMediaPlayback);
 
     return () => {
-      window.removeEventListener("pointerdown", resumeAudio);
-      window.removeEventListener("keydown", resumeAudio);
+      window.removeEventListener("pointerdown", resumeMediaPlayback);
+      window.removeEventListener("keydown", resumeMediaPlayback);
     };
-  }, []);
+  }, [resumeMediaPlayback]);
 
   const emitMove = useCallback((x: number, y: number) => {
     positionRef.current = { x, y };
@@ -225,52 +526,343 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
     };
   }, [moveBy]);
 
-  const updateMedia = async (nextMic: boolean, nextCamera: boolean) => {
-    setMicEnabled(nextMic);
-    setCameraEnabled(nextCamera);
+  const publishStream = useCallback(
+    async (stream: MediaStream | null) => {
+      const next = stream ? new MediaStream(stream.getTracks()) : null;
+      setLocalStream(next);
+      await webrtcRef.current?.setLocalStream(stream);
+      const socketId = getSocket().id;
+      if (socketId) {
+        await webrtcRef.current?.syncPeers(peerIds, socketId);
+      }
+      resumeMediaPlayback();
+    },
+    [peerIds, resumeMediaPlayback]
+  );
+
+  const broadcastMedia = useCallback(
+    (mic: boolean, cam: boolean, screen: boolean, screenAudio: boolean) => {
+      getSocket().emit("user:media", {
+        micEnabled: mic,
+        cameraEnabled: cam,
+        screenSharing: screen,
+        screenAudioEnabled: screenAudio,
+      });
+      setLocalUser((current) =>
+        current
+          ? {
+              ...current,
+              micEnabled: mic,
+              cameraEnabled: cam,
+              screenSharing: screen,
+              screenAudioEnabled: screenAudio,
+            }
+          : current
+      );
+    },
+    []
+  );
+
+  const acquireMicTrack = useCallback(async (): Promise<MediaStreamTrack | null> => {
+    const existing = liveTrack(micTrackRef.current);
+    if (existing) {
+      existing.enabled = true;
+      tagMicTrack(existing);
+      return existing;
+    }
+
+    stopMediaTrack(micTrackRef.current);
+    micTrackRef.current = null;
+
+    const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const track = audioStream.getAudioTracks()[0] ?? null;
+    if (track) {
+      tagMicTrack(track);
+      micTrackRef.current = track;
+    }
+    return track;
+  }, []);
+
+  const releaseShareTracks = useCallback(() => {
+    if (screenTrackRef.current) {
+      screenTrackRef.current.onended = null;
+      screenTrackRef.current = null;
+    }
+    if (displayAudioTrackRef.current) {
+      displayAudioTrackRef.current.onended = null;
+      displayAudioTrackRef.current = null;
+    }
+    if (displayStreamRef.current) {
+      stopMediaStream(displayStreamRef.current);
+      displayStreamRef.current = null;
+    }
+  }, []);
+
+  const stopScreenShare = useCallback(async () => {
+    if (!screenSharingRef.current && !screenTrackRef.current) return;
+    screenSharingRef.current = false;
+    releaseShareTracks();
+
+    const micOn = micEnabled;
+    const camOn = cameraEnabled;
 
     let stream = localStream;
+    if (!stream) {
+      stream = new MediaStream();
+    }
 
-    if (nextMic || nextCamera) {
-      if (!stream) {
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: nextMic,
-          video: nextCamera,
-        });
-      } else {
-        if (nextMic && !stream.getAudioTracks().length) {
-          const audio = await navigator.mediaDevices.getUserMedia({ audio: true });
-          audio.getAudioTracks().forEach((track) => stream?.addTrack(track));
-        }
-        if (nextCamera && !stream.getVideoTracks().length) {
-          const video = await navigator.mediaDevices.getUserMedia({ video: true });
-          video.getVideoTracks().forEach((track) => stream?.addTrack(track));
+    // Drop all audio tracks; we'll re-add only the mic if needed.
+    setStreamAudioTracks(stream, []);
+    clearVideoTracks(stream);
+
+    const liveMic = liveTrack(micTrackRef.current);
+    if (!liveMic) {
+      stopMediaTrack(micTrackRef.current);
+      micTrackRef.current = null;
+    }
+
+    try {
+      if (micOn) {
+        const track = liveMic ?? (await acquireMicTrack());
+        if (track) {
+          tagMicTrack(track);
+          track.enabled = true;
+          setStreamAudioTracks(stream, [track]);
         }
       }
 
-      stream.getAudioTracks().forEach((track) => {
-        track.enabled = nextMic;
-      });
-      stream.getVideoTracks().forEach((track) => {
-        track.enabled = nextCamera;
-      });
+      if (camOn) {
+        const liveVideo = stream
+          .getVideoTracks()
+          .find((track) => track.readyState === "live" && track.enabled);
+        if (!liveVideo) {
+          clearVideoTracks(stream);
+          const video = await navigator.mediaDevices.getUserMedia({ video: true });
+          video.getVideoTracks().forEach((track) => stream.addTrack(track));
+        }
+      }
+
+      await webrtcRef.current?.setScreenShareEncoding(null);
+
+      const selfId = getSocket().id;
+      if (selfId) {
+        getSocket().emit("annotate:clear", { targetId: selfId });
+        setAnnotations((current) => {
+          const next = new Map(current);
+          next.delete(selfId);
+          return next;
+        });
+      }
+
+      const hasTracks = stream.getTracks().length > 0;
+      await publishStream(hasTracks ? stream : null);
+      broadcastMedia(micOn, camOn, false, false);
+      setScreenSharing(false);
+      resumeMediaPlayback();
+    } catch (err) {
+      setScreenSharing(false);
+      setMediaError(
+        err instanceof Error ? err.message : "Could not restore microphone after screen share"
+      );
+    }
+  }, [
+    acquireMicTrack,
+    broadcastMedia,
+    cameraEnabled,
+    localStream,
+    micEnabled,
+    publishStream,
+    releaseShareTracks,
+    resumeMediaPlayback,
+  ]);
+
+  const startScreenShare = useCallback(
+    async (surface?: ScreenShareSurface) => {
+      try {
+        const preset = getScreenShareQualityPreset(screenShareQuality);
+        const displayStream = await captureDisplay(surface, preset);
+        const screenTrack = displayStream.getVideoTracks()[0];
+        if (!screenTrack || screenTrack.readyState !== "live") return;
+
+        if (displayStreamRef.current) {
+          stopMediaStream(displayStreamRef.current);
+        }
+        displayStreamRef.current = displayStream;
+
+        let stream = localStream;
+        if (!stream) {
+          stream = new MediaStream();
+        }
+
+        // Ensure we have a mic track for the broadcaster if mic is enabled,
+        // and tag it as speech so receivers can route it correctly.
+        if (micEnabled) {
+          await acquireMicTrack();
+        }
+
+        screenTrackRef.current = screenTrack;
+        swapVideoTrack(stream, screenTrack);
+
+        const trackId = screenTrack.id;
+        screenTrack.onended = () => {
+          if (screenTrackRef.current?.id !== trackId) return;
+          screenSharingRef.current = false;
+          void stopScreenShare();
+        };
+
+        const displayAudio = displayStream.getAudioTracks()[0];
+        if (displayAudio) {
+          displayAudio.onended = () => {
+            if (displayAudioTrackRef.current?.id !== displayAudio.id) return;
+            displayAudioTrackRef.current = null;
+            const current = localStreamRef.current;
+            if (!current || !screenSharingRef.current) return;
+            applyShareAudio(current, new MediaStream(), micEnabled);
+            broadcastMedia(micEnabled, cameraEnabled, true, false);
+            void publishStream(current);
+          };
+        }
+
+        applyShareAudio(stream, displayStream, micEnabled);
+
+        if (screenTrack.readyState !== "live") {
+          releaseShareTracks();
+          return;
+        }
+
+        broadcastMedia(micEnabled, cameraEnabled, true, !!displayAudio);
+        screenSharingRef.current = true;
+        setScreenSharing(true);
+        setBroadcastPreviewOpen(true);
+        setSidebarOpen(true);
+
+        await publishStream(stream);
+        await applyScreenEncoding(screenShareQuality);
+
+        if (screenTrack.readyState !== "live") {
+          void stopScreenShare();
+        }
+      } catch {
+        screenSharingRef.current = false;
+        releaseShareTracks();
+        setScreenSharing(false);
+      }
+    },
+    [
+      acquireMicTrack,
+      applyShareAudio,
+      applyScreenEncoding,
+      broadcastMedia,
+      cameraEnabled,
+      localStream,
+      micEnabled,
+      publishStream,
+      screenShareQuality,
+      stopScreenShare,
+    ]
+  );
+
+  const updateMedia = async (nextMic: boolean, nextCamera: boolean) => {
+    const prevMic = micEnabled;
+    const prevCamera = cameraEnabled;
+
+    setMediaError(null);
+    setMicEnabled(nextMic);
+    setCameraEnabled(nextCamera);
+
+    try {
+      if (screenSharing) {
+        let stream = localStream;
+        if (!stream) {
+          stream = new MediaStream();
+        }
+
+        if (nextMic) {
+          await acquireMicTrack();
+        } else if (micTrackRef.current) {
+          micTrackRef.current.enabled = false;
+        }
+
+        const displayStream = displayAudioTrackRef.current
+          ? new MediaStream([displayAudioTrackRef.current])
+          : new MediaStream();
+
+        applyShareAudio(stream, displayStream, nextMic);
+        await publishStream(stream);
+        broadcastMedia(nextMic, nextCamera, true, !!displayAudioTrackRef.current);
+        resumeMediaPlayback();
+        return;
+      }
+
+      let stream = localStream;
+
+      if (nextMic || nextCamera) {
+        if (!stream) {
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: nextMic,
+            video: nextCamera,
+          });
+          if (nextMic) {
+            const track = stream.getAudioTracks()[0];
+            if (track) {
+              tagMicTrack(track);
+              micTrackRef.current = track;
+            }
+          }
+        } else {
+          if (nextMic) {
+            const liveMic = stream
+              .getAudioTracks()
+              .find((track) => track.readyState === "live");
+            if (liveMic) {
+              liveMic.enabled = true;
+              tagMicTrack(liveMic);
+              micTrackRef.current = liveMic;
+            } else {
+              const track = await acquireMicTrack();
+              if (track) {
+                for (const old of stream.getAudioTracks()) {
+                  old.stop();
+                  stream.removeTrack(old);
+                }
+                stream.addTrack(track);
+              }
+            }
+          } else {
+            stream.getAudioTracks().forEach((track) => {
+              track.enabled = false;
+            });
+          }
+
+          if (nextCamera && !stream.getVideoTracks().length) {
+            const video = await navigator.mediaDevices.getUserMedia({ video: true });
+            video.getVideoTracks().forEach((track) => stream?.addTrack(track));
+          }
+        }
+
+        stream.getVideoTracks().forEach((track) => {
+          track.enabled = nextCamera;
+        });
     } else if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
+      stopMediaStream(stream);
+      micTrackRef.current = null;
       stream = null;
     }
 
-    setLocalStream(stream);
-    await webrtcRef.current?.setLocalStream(stream);
-
-    const socketId = getSocket().id;
-    if (socketId) {
-      await webrtcRef.current?.syncPeers(peerIds, socketId);
+      await publishStream(stream);
+      broadcastMedia(nextMic, nextCamera, false, false);
+      resumeMediaPlayback();
+    } catch (err) {
+      setMicEnabled(prevMic);
+      setCameraEnabled(prevCamera);
+      const message =
+        err instanceof DOMException && err.name === "NotAllowedError"
+          ? "Microphone permission denied. Allow mic access in the browser, then try again."
+          : err instanceof Error
+            ? err.message
+            : "Could not access microphone";
+      setMediaError(message);
     }
-
-    getSocket().emit("user:media", {
-      micEnabled: nextMic,
-      cameraEnabled: nextCamera,
-    });
   };
 
   const handleStatusChange = (status: UserStatus) => {
@@ -282,7 +874,29 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
     getSocket().emit("chat:send", { text, scope });
   };
 
+  const releaseAllMedia = useCallback(() => {
+    releaseShareTracks();
+    stopMediaStream(localStream);
+    stopMediaTrack(micTrackRef.current);
+    micTrackRef.current = null;
+    setLocalStream(null);
+    setScreenSharing(false);
+    void webrtcRef.current?.setLocalStream(null);
+    void webrtcRef.current?.setScreenShareEncoding(null);
+  }, [localStream, releaseShareTracks]);
+
+  useEffect(() => {
+    const onPageHide = () => {
+      if (!screenSharingRef.current) return;
+      void stopScreenShare();
+    };
+
+    window.addEventListener("pagehide", onPageHide);
+    return () => window.removeEventListener("pagehide", onPageHide);
+  }, [stopScreenShare]);
+
   const handleLeave = () => {
+    releaseAllMedia();
     disconnectSocket();
     router.push("/");
   };
@@ -319,7 +933,13 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-[#07070d]">
-      <SpatialAudio localUser={localUser} users={users} remoteStreams={remoteStreams} />
+      <SpatialAudio
+        localUser={localUser}
+        users={users}
+        remoteStreams={remoteStreams}
+        peerMicMuted={peerMicMuted}
+        peerScreenAudioMuted={peerScreenAudioMuted}
+      />
       <div className="flex h-full">
         {/* Office canvas area */}
         <div className="relative flex min-w-0 flex-1 flex-col">
@@ -352,6 +972,28 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
             </div>
           </div>
 
+          {screenSharing && (
+            <div className="pointer-events-none absolute left-1/2 top-4 z-30 -translate-x-1/2">
+              <div className="pointer-events-auto flex items-center gap-2 rounded-2xl border border-violet-400/30 bg-violet-500/15 px-3 py-2 backdrop-blur-xl">
+                <span className="flex items-center gap-1.5 text-[12px] font-medium text-violet-100">
+                  <span className="relative flex h-2 w-2">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-violet-400 opacity-70" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-violet-400" />
+                  </span>
+                  You are presenting
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void stopScreenShare()}
+                  className="flex items-center gap-1.5 rounded-lg bg-rose-500/25 px-2.5 py-1 text-[11px] font-semibold text-rose-100 transition hover:bg-rose-500/35"
+                >
+                  <MonitorOff className="h-3.5 w-3.5" />
+                  Stop share
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Online users floating chip */}
           <OnlineUsersChip users={users} localUserId={localUser.id} />
 
@@ -360,75 +1002,212 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
             <OfficeCanvas users={users} localUser={localUser} onMove={emitMove} />
           </div>
 
+          {screenSharing && localStream && broadcastPreviewOpen && (
+            <BroadcastPreview
+              stream={localStream}
+              onMinimize={() => setBroadcastPreviewOpen(false)}
+              broadcasterId={localUser.id}
+              strokes={myStrokes}
+              onClear={emitAnnotationClear}
+            />
+          )}
+
+          {screenSharing && localStream && !broadcastPreviewOpen && (
+            <button
+              type="button"
+              onClick={() => setBroadcastPreviewOpen(true)}
+              className="pointer-events-auto absolute bottom-24 left-4 z-[45] flex items-center gap-2 rounded-xl border border-violet-400/35 bg-black/85 px-3 py-2 text-[11px] font-medium text-violet-100 shadow-lg backdrop-blur-xl transition hover:bg-violet-500/15"
+            >
+              <Monitor className="h-3.5 w-3.5" />
+              Show broadcast preview
+            </button>
+          )}
+
+          {mediaError && (
+            <div className="pointer-events-none absolute bottom-24 left-1/2 z-40 max-w-md -translate-x-1/2 px-4">
+              <p className="pointer-events-auto rounded-xl border border-rose-400/30 bg-rose-500/15 px-4 py-2 text-center text-[12px] text-rose-100 backdrop-blur-xl">
+                {mediaError}
+              </p>
+            </div>
+          )}
+
           {/* Floating control dock */}
           <ControlBar
             localUser={localUser}
             micEnabled={micEnabled}
             cameraEnabled={cameraEnabled}
+            screenSharing={screenSharing}
+            anyonePresenting={anyonePresenting}
+            annotateDrawing={annotateDrawing}
+            onToggleAnnotateDrawing={() => {
+              setAnnotateDrawing((v) => {
+                const next = !v;
+                if (next) setSidebarOpen(true);
+                return next;
+              });
+            }}
+            annotationColor={annotationColor}
+            onAnnotationColorChange={setAnnotationColor}
             sidebarOpen={sidebarOpen}
             onToggleMic={() => updateMedia(!micEnabled, cameraEnabled)}
             onToggleCamera={() => updateMedia(micEnabled, !cameraEnabled)}
+            screenShareQuality={screenShareQuality}
+            onScreenShareQualityChange={(id) => void handleScreenShareQualityChange(id)}
+            onStartScreenShare={startScreenShare}
+            onStopScreenShare={() => void stopScreenShare()}
             onToggleSidebar={() => setSidebarOpen((v) => !v)}
             onStatusChange={handleStatusChange}
             onLeave={handleLeave}
           />
         </div>
 
-        {/* Sidebar */}
-        <aside
-          className={clsx(
-            "z-40 flex h-full shrink-0 flex-col border-l border-white/[0.06] bg-[#0a0a14]/95 backdrop-blur-xl transition-all duration-300 ease-out",
-            "fixed inset-y-0 right-0 lg:static",
-            sidebarOpen ? "w-[340px] translate-x-0" : "w-0 translate-x-full lg:translate-x-0"
-          )}
+        <ResizableSidebar
+          open={sidebarOpen}
+          presenting={anyonePresenting}
+          onClose={() => setSidebarOpen(false)}
+          header={
+            <SidebarHeader
+              presenter={activePresenter}
+              localUserId={localUser.id}
+              watcherCount={watcherCount}
+              onlineCount={users.length}
+              onClose={() => setSidebarOpen(false)}
+              onStopSharing={
+                screenSharing ? () => void stopScreenShare() : undefined
+              }
+            />
+          }
+          top={
+            <VideoGrid
+              localUser={localUser}
+              localScreenSharing={screenSharing}
+              users={users}
+              localStream={localStream}
+              remoteStreams={remoteStreams}
+              peerStates={peerStates}
+              peerMicMuted={peerMicMuted}
+              peerScreenAudioMuted={peerScreenAudioMuted}
+              onTogglePeerAudioMute={togglePeerAudioMute}
+              annotations={annotations}
+              localUserId={localUser.id}
+              annotationColor={annotationColor}
+              onAnnotationColorChange={setAnnotationColor}
+              onAnnotationStroke={emitAnnotationStroke}
+              onAnnotationClear={emitAnnotationClear}
+              annotateDrawing={annotateDrawing}
+              onToggleAnnotateDrawing={() => {
+                setAnnotateDrawing((v) => {
+                  const next = !v;
+                  if (next) setSidebarOpen(true);
+                  return next;
+                });
+              }}
+            />
+          }
+          bottom={
+            <ChatPanel
+              messages={messages}
+              onSend={handleSendMessage}
+              currentUserId={localUser.id}
+              currentZone={currentZone}
+              typingUsers={Array.from(typingUsers.values()).filter(
+                (entry) => entry.userId !== localUser.id
+              )}
+            />
+          }
+        />
+      </div>
+    </div>
+  );
+}
+
+function SidebarHeader({
+  presenter,
+  localUserId,
+  watcherCount,
+  onlineCount,
+  onClose,
+  onStopSharing,
+}: {
+  presenter: User | null;
+  localUserId: string;
+  watcherCount: number;
+  onlineCount: number;
+  onClose: () => void;
+  onStopSharing?: () => void;
+}) {
+  const isLocalPresenter = presenter?.id === localUserId;
+
+  if (!presenter) {
+    return (
+      <div className="flex items-center justify-between border-b border-white/[0.05] px-4 py-3">
+        <div className="flex items-center gap-2">
+          <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-500/15 ring-1 ring-emerald-400/25">
+            <Users className="h-3 w-3 text-emerald-300" />
+          </span>
+          <div className="leading-tight">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-zinc-400">
+              Floor activity
+            </p>
+            <p className="text-[10px] text-zinc-500">{onlineCount} online</p>
+          </div>
+        </div>
+        <button
+          onClick={onClose}
+          className="rounded-lg p-1.5 text-zinc-400 transition hover:bg-white/[0.06] hover:text-white"
+          aria-label="Close sidebar"
         >
-          {sidebarOpen && (
-            <div className="flex h-full min-h-0 flex-col">
-              {/* Header */}
-              <div className="flex shrink-0 items-center justify-between border-b border-white/[0.05] px-4 py-3">
-                <p className="text-[11px] font-semibold uppercase tracking-widest text-zinc-500">
-                  Floor activity
-                </p>
-                <button
-                  onClick={() => setSidebarOpen(false)}
-                  className="rounded-lg p-1.5 text-zinc-400 transition hover:bg-white/[0.06] hover:text-white"
-                  aria-label="Close sidebar"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+    );
+  }
 
-              {/* Nearby videos (top) */}
-              <div className="flex max-h-[55%] shrink-0 flex-col overflow-hidden border-b border-white/[0.05] pt-3">
-                <VideoGrid
-                  localUser={localUser}
-                  users={users}
-                  localStream={localStream}
-                  remoteStreams={remoteStreams}
-                  peerStates={peerStates}
-                />
-              </div>
-
-              {/* Chat (bottom, flex-grow) */}
-              <div className="flex min-h-0 flex-1 flex-col pt-3">
-                <ChatPanel
-                  messages={messages}
-                  onSend={handleSendMessage}
-                  currentUserId={localUser.id}
-                  currentZone={currentZone}
-                />
-              </div>
-            </div>
-          )}
-        </aside>
-
-        {/* Mobile sidebar backdrop */}
-        {sidebarOpen && (
-          <div
-            className="fixed inset-0 z-30 bg-black/60 backdrop-blur-sm lg:hidden"
-            onClick={() => setSidebarOpen(false)}
-          />
+  return (
+    <div className="flex items-center justify-between gap-2 border-b border-violet-400/15 bg-gradient-to-r from-violet-500/[0.06] via-transparent to-transparent px-3 py-2.5">
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-violet-500/20 ring-1 ring-violet-400/35">
+          <Monitor className="h-3.5 w-3.5 text-violet-200" />
+          <span className="absolute -right-0.5 -top-0.5 flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-violet-400 opacity-70" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-violet-400" />
+          </span>
+        </span>
+        <div className="min-w-0 leading-tight">
+          <p className="truncate text-[12px] font-semibold text-white">
+            <span
+              className="mr-1 inline-block h-2 w-2 rounded-full align-middle ring-1 ring-white/30"
+              style={{ backgroundColor: presenter.color }}
+            />
+            {isLocalPresenter ? "You" : presenter.name} is sharing
+          </p>
+          <p className="text-[10px] text-zinc-400">
+            {watcherCount} {watcherCount === 1 ? "viewer" : "viewers"}
+            <span className="mx-1 text-zinc-700">·</span>
+            {onlineCount} online
+          </p>
+        </div>
+      </div>
+      <div className="flex shrink-0 items-center gap-1">
+        {onStopSharing && (
+          <button
+            type="button"
+            onClick={onStopSharing}
+            className="flex items-center gap-1 rounded-lg bg-rose-500/15 px-2 py-1 text-[11px] font-medium text-rose-200 transition hover:bg-rose-500/25"
+            aria-label="Stop sharing"
+            title="Stop sharing"
+          >
+            <PhoneOff className="h-3 w-3" />
+            Stop
+          </button>
         )}
+        <button
+          onClick={onClose}
+          className="rounded-lg p-1.5 text-zinc-400 transition hover:bg-white/[0.06] hover:text-white"
+          aria-label="Close sidebar"
+        >
+          <X className="h-4 w-4" />
+        </button>
       </div>
     </div>
   );

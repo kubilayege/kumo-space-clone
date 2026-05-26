@@ -6,8 +6,10 @@ import {
   AUDIO_RANGE,
   DEFAULT_OFFICE,
   RoomZone,
+  SCREEN_SHARE_RANGE,
   User,
   distance,
+  getScreenSharePresence,
   getZoneAt,
 } from "@/lib/types";
 import { Avatar } from "@/components/Avatar";
@@ -112,7 +114,19 @@ export function OfficeCanvas({ users, localUser, onMove }: OfficeCanvasProps) {
           <ZoneCard key={zone.id} zone={zone} />
         ))}
 
-        {/* Proximity ring (audio range) */}
+        <div
+          className="pointer-events-none absolute rounded-full transition-[left,top,width,height] duration-500 ease-out"
+          style={{
+            left: localUser.x - SCREEN_SHARE_RANGE,
+            top: localUser.y - SCREEN_SHARE_RANGE,
+            width: SCREEN_SHARE_RANGE * 2,
+            height: SCREEN_SHARE_RANGE * 2,
+            background:
+              "radial-gradient(circle, rgba(139,92,246,0.06) 0%, rgba(139,92,246,0.02) 55%, transparent 100%)",
+            border: "1px dashed rgba(139,92,246,0.12)",
+          }}
+        />
+
         <div
           className="pointer-events-none absolute rounded-full transition-[left,top] duration-150 ease-out"
           style={{
@@ -132,6 +146,11 @@ export function OfficeCanvas({ users, localUser, onMove }: OfficeCanvasProps) {
           const zone = isLocal ? getZoneAt(user.x, user.y, map) : null;
           const isNearby = !isLocal && distance(user, localUser) <= AUDIO_RANGE;
           const isSpeaking = user.micEnabled && (isLocal || isNearby);
+          const sharePresence = isLocal
+            ? 1
+            : getScreenSharePresence(distance(user, localUser));
+          const isPresenting =
+            user.screenSharing && (isLocal || sharePresence > 0.06);
 
           return (
             <div
@@ -139,14 +158,19 @@ export function OfficeCanvas({ users, localUser, onMove }: OfficeCanvasProps) {
               className={clsx(
                 "absolute -translate-x-1/2 -translate-y-1/2",
                 isLocal ? "z-30" : "z-20",
-                "transition-[left,top] duration-150 ease-out"
+                "transition-[left,top,opacity] duration-500 ease-out"
               )}
-              style={{ left: user.x, top: user.y }}
+              style={{
+                left: user.x,
+                top: user.y,
+                opacity: user.screenSharing && !isLocal ? 0.35 + sharePresence * 0.65 : 1,
+              }}
             >
               <Avatar
                 user={user}
                 isLocal={isLocal}
                 isSpeaking={isSpeaking}
+                isPresenting={isPresenting}
                 zoneName={zone?.name}
                 size="md"
               />
@@ -158,7 +182,7 @@ export function OfficeCanvas({ users, localUser, onMove }: OfficeCanvasProps) {
       {/* Floor info pill */}
       <div className="pointer-events-none absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full border border-white/[0.06] bg-black/40 px-3 py-1.5 text-[11px] text-zinc-400 backdrop-blur">
         <span className="font-medium text-zinc-300">WASD</span> to move ·{" "}
-        <span className="font-medium text-zinc-300">click</span> to walk · purple ring is your audio range
+        <span className="font-medium text-zinc-300">click</span> to walk · inner ring = voice · outer = screen fades out
       </div>
     </div>
   );

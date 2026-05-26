@@ -1,6 +1,7 @@
 import { Server as HttpServer } from "http";
 import { Server, Socket } from "socket.io";
 import { v4 as uuidv4 } from "uuid";
+import { DrawStroke } from "../src/lib/annotations";
 import {
   AVATAR_COLORS,
   ChatMessage,
@@ -23,6 +24,13 @@ function getAllowedOrigins(): string[] {
 }
 const spaces = new Map<string, Map<string, User>>();
 const chatHistory = new Map<string, ChatMessage[]>();
+const annotationStrokes = new Map<string, Map<string, DrawStroke[]>>();
+
+function getSpaceAnnotations(spaceId: string): DrawStroke[] {
+  const byTarget = annotationStrokes.get(spaceId);
+  if (!byTarget) return [];
+  return Array.from(byTarget.values()).flat();
+}
 
 function getSpace(spaceId: string): Map<string, User> {
   if (!spaces.has(spaceId)) {
@@ -88,7 +96,12 @@ io.on("connection", (socket: Socket) => {
         name: string;
         color?: string;
       },
-      callback?: (response: { user: User; users: User[]; messages: ChatMessage[] }) => void
+      callback?: (response: {
+        user: User;
+        users: User[];
+        messages: ChatMessage[];
+        annotations: DrawStroke[];
+      }) => void
     ) => {
       const { spaceId, name } = payload;
       const users = getSpace(spaceId);
@@ -105,6 +118,8 @@ io.on("connection", (socket: Socket) => {
         status: "available",
         micEnabled: false,
         cameraEnabled: false,
+        screenSharing: false,
+        screenAudioEnabled: false,
       };
 
       users.set(socket.id, user);
@@ -118,9 +133,32 @@ io.on("connection", (socket: Socket) => {
         user,
         users: serializeUsers(users),
         messages: chatHistory.get(spaceId) ?? [],
+        annotations: getSpaceAnnotations(spaceId),
       });
     }
   );
+
+  socket.on("annotate:stroke", (stroke: DrawStroke) => {
+    if (!currentSpaceId || !stroke?.targetId) return;
+    let byTarget = annotationStrokes.get(currentSpaceId);
+    if (!byTarget) {
+      byTarget = new Map();
+      annotationStrokes.set(currentSpaceId, byTarget);
+    }
+    const list = byTarget.get(stroke.targetId) ?? [];
+    list.push(stroke);
+    if (list.length > 400) {
+      list.splice(0, list.length - 400);
+    }
+    byTarget.set(stroke.targetId, list);
+    socket.to(currentSpaceId).emit("annotate:stroke", stroke);
+  });
+
+  socket.on("annotate:clear", (payload: { targetId: string }) => {
+    if (!currentSpaceId || !payload?.targetId) return;
+    annotationStrokes.get(currentSpaceId)?.delete(payload.targetId);
+    io.to(currentSpaceId).emit("annotate:clear", payload);
+  });
 
   socket.on("user:move", (payload: { x: number; y: number }) => {
     if (!currentSpaceId || !currentUserId) return;
@@ -149,16 +187,26 @@ io.on("connection", (socket: Socket) => {
     io.to(currentSpaceId).emit("user:updated", user);
   });
 
-  socket.on("user:media", (payload: { micEnabled: boolean; cameraEnabled: boolean }) => {
-    if (!currentSpaceId || !currentUserId) return;
-    const users = getSpace(currentSpaceId);
-    const user = users.get(currentUserId);
-    if (!user) return;
+  socket.on(
+    "user:media",
+    (payload: {
+      micEnabled: boolean;
+      cameraEnabled: boolean;
+      screenSharing: boolean;
+      screenAudioEnabled?: boolean;
+    }) => {
+      if (!currentSpaceId || !currentUserId) return;
+      const users = getSpace(currentSpaceId);
+      const user = users.get(currentUserId);
+      if (!user) return;
 
-    user.micEnabled = payload.micEnabled;
-    user.cameraEnabled = payload.cameraEnabled;
-    io.to(currentSpaceId).emit("user:updated", user);
-  });
+      user.micEnabled = payload.micEnabled;
+      user.cameraEnabled = payload.cameraEnabled;
+      user.screenSharing = payload.screenSharing;
+      user.screenAudioEnabled = payload.screenAudioEnabled ?? false;
+      io.to(currentSpaceId).emit("user:updated", user);
+    }
+  );
 
   socket.on(
     "chat:send",
@@ -198,6 +246,57 @@ io.on("connection", (socket: Socket) => {
   );
 
   socket.on(
+    "chat:typing",
+    (payload: { scope: "nearby" | "floor" | "all" }) => {
+      if (!currentSpaceId || !currentUserId) return;
+      const users = getSpace(currentSpaceId);
+      const user = users.get(currentUserId);
+      if (!user) return;
+
+      const zone = getZoneAt(user.x, user.y, DEFAULT_OFFICE);
+      const typingPayload = {
+        userId: user.id,
+        userName: user.name,
+        userColor: user.color,
+        scope: payload.scope,
+        zoneId: zone?.id,
+      };
+
+      if (payload.scope === "all" || payload.scope === "floor") {
+        socket.to(currentSpaceId).emit("chat:typing", typingPayload);
+        return;
+      }
+
+      const nearby = getNearbyUsers(user, users, 220);
+      for (const recipient of nearby) {
+        io.to(recipient.id).emit("chat:typing", typingPayload);
+      }
+    }
+  );
+
+  socket.on(
+    "chat:typing:stop",
+    (payload: { scope: "nearby" | "floor" | "all" }) => {
+      if (!currentSpaceId || !currentUserId) return;
+      const users = getSpace(currentSpaceId);
+      const user = users.get(currentUserId);
+      if (!user) return;
+
+      const stopPayload = { userId: user.id };
+
+      if (payload.scope === "all" || payload.scope === "floor") {
+        socket.to(currentSpaceId).emit("chat:typing:stop", stopPayload);
+        return;
+      }
+
+      const nearby = getNearbyUsers(user, users, 220);
+      for (const recipient of nearby) {
+        io.to(recipient.id).emit("chat:typing:stop", stopPayload);
+      }
+    }
+  );
+
+  socket.on(
     "webrtc:signal",
     (payload: { to: string; signal: RTCSessionDescriptionInit | RTCIceCandidateInit }) => {
       io.to(payload.to).emit("webrtc:signal", {
@@ -211,6 +310,8 @@ io.on("connection", (socket: Socket) => {
     if (!currentSpaceId || !currentUserId) return;
     const users = getSpace(currentSpaceId);
     users.delete(currentUserId);
+    annotationStrokes.get(currentSpaceId)?.delete(currentUserId);
+    socket.to(currentSpaceId).emit("annotate:clear", { targetId: currentUserId });
     socket.to(currentSpaceId).emit("user:left", currentUserId);
     broadcastUsers(io, currentSpaceId);
   });
