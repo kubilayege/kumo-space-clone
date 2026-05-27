@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import clsx from "clsx";
-import { Copy, Monitor, MonitorOff, PhoneOff, Users, X } from "lucide-react";
+import { Copy, Monitor, MonitorOff, PhoneOff, UserPlus, Users, X } from "lucide-react";
 import { ChatPanel } from "@/components/ChatPanel";
 import { ControlBar } from "@/components/ControlBar";
+import { InviteModal } from "@/components/InviteModal";
 import { OfficeCanvas } from "@/components/OfficeCanvas";
 import { SpatialAudio } from "@/components/SpatialAudio";
 import { BroadcastPreview } from "@/components/BroadcastPreview";
@@ -85,6 +86,7 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
   const [annotateDrawing, setAnnotateDrawing] = useState(false);
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [broadcastPreviewOpen, setBroadcastPreviewOpen] = useState(true);
+  const [inviteOpen, setInviteOpen] = useState(false);
 
   const keysPressed = useRef(new Set<string>());
   const positionRef = useRef({ x: 600, y: 440 });
@@ -994,8 +996,22 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
             </div>
           )}
 
-          {/* Online users floating chip */}
-          <OnlineUsersChip users={users} localUserId={localUser.id} />
+          {/* Online users floating chip + invite */}
+          <div className="pointer-events-none absolute right-4 top-4 z-30 flex items-center gap-2">
+            <OnlineUsersChip users={users} localUserId={localUser.id} />
+            <button
+              type="button"
+              onClick={() => setInviteOpen(true)}
+              className="pointer-events-auto flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-[12px] font-medium text-[var(--ink-2)] shadow-[var(--shadow-md)] transition hover:bg-[var(--surface-2)]"
+            >
+              <UserPlus className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Invite</span>
+            </button>
+          </div>
+
+          {inviteOpen && (
+            <InviteModal spaceId={spaceId} onClose={() => setInviteOpen(false)} />
+          )}
 
           {/* Office canvas */}
           <div className="absolute inset-0 p-4">
@@ -1279,8 +1295,8 @@ function OnlineUsersChip({ users, localUserId }: { users: User[]; localUserId: s
   if (others.length === 0) return null;
 
   return (
-    <div className="pointer-events-none absolute right-4 top-4 z-30 hidden md:block">
-      <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-2 shadow-[var(--shadow-md)]">
+    <div className="pointer-events-auto hidden md:block">
+      <div className="flex items-center gap-2 rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-2 shadow-[var(--shadow-md)]">
         <div className="flex -space-x-2">
           {others.map((user) => (
             <div
