@@ -52,6 +52,11 @@ import {
   saveScreenShareQuality,
 } from "@/lib/screenShareQuality";
 import { liveTrack, stopMediaStream, stopMediaTrack } from "@/lib/mediaSession";
+import {
+  loadCachedMap,
+  rememberSpace,
+  saveCachedMap,
+} from "@/lib/localSpaces";
 import { ConnectionState, WebRTCManager } from "@/lib/webrtc";
 
 interface SpaceRoomProps {
@@ -310,7 +315,7 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
     let mounted = true;
 
     joinSpace(spaceId, name, color, spawn)
-      .then(({ user, users: initialUsers, messages: initialMessages, annotations: initialAnnotations, map }) => {
+      .then(({ user, users: initialUsers, messages: initialMessages, annotations: initialAnnotations, map, mapIsCustom }) => {
         if (!mounted) return;
         positionRef.current = { x: user.x, y: user.y };
         setLocalUser(user);
@@ -318,7 +323,22 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
         setUsers(initialUsers);
         setMessages(initialMessages);
         setAnnotations(strokesToMap(initialAnnotations ?? []));
-        if (map) setOfficeMap(map);
+        rememberSpace(spaceId);
+
+        if (mapIsCustom && map) {
+          setOfficeMap(map);
+          saveCachedMap(spaceId, map);
+        } else {
+          // Server has no custom map (fresh, restarted, or wiped). Fall back to
+          // this client's last published map and re-seed the server with it.
+          const cached = loadCachedMap(spaceId);
+          if (cached) {
+            setOfficeMap(cached);
+            getSocket().emit("space:map:set", cached);
+          } else if (map) {
+            setOfficeMap(map);
+          }
+        }
         setLoading(false);
       })
       .catch((joinError) => {
@@ -432,6 +452,7 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
 
     socket.on("space:map", (map: OfficeMap) => {
       setOfficeMap(map);
+      saveCachedMap(spaceId, map);
     });
 
     return () => {
@@ -1066,6 +1087,7 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
               map={officeMap}
               onPublish={(map) => {
                 setOfficeMap(map);
+                saveCachedMap(spaceId, map);
                 getSocket().emit("space:map:set", map);
               }}
               onClose={() => setEditorOpen(false)}

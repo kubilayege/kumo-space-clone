@@ -21,7 +21,7 @@ export function joinSpace(
   name: string,
   color?: string,
   spawn?: { x: number; y: number }
-): Promise<{ user: User; users: User[]; messages: ChatMessage[]; annotations: DrawStroke[]; map: OfficeMap }> {
+): Promise<{ user: User; users: User[]; messages: ChatMessage[]; annotations: DrawStroke[]; map: OfficeMap; mapIsCustom: boolean }> {
   const client = getSocket();
 
   return new Promise((resolve, reject) => {
@@ -38,6 +38,7 @@ export function joinSpace(
         messages: ChatMessage[];
         annotations: DrawStroke[];
         map: OfficeMap;
+        mapIsCustom: boolean;
       }) => {
         if (response?.user) {
           resolve(response);

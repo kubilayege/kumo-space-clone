@@ -14,13 +14,11 @@ import {
   Plus,
 } from "lucide-react";
 import { AVATAR_COLORS, DEFAULT_OFFICE } from "@/lib/types";
-
-const RECENT_KEY = "atrium-recent-spaces";
-
-interface RecentSpace {
-  id: string;
-  lastSeen: number;
-}
+import {
+  RecentSpace,
+  loadRecentSpaces,
+  rememberSpace,
+} from "@/lib/localSpaces";
 
 const SPAWNS = [
   {
@@ -48,27 +46,6 @@ const SPAWNS = [
 
 const STEPS = ["Identity", "Mic & camera", "Pick a spawn"] as const;
 
-function loadRecent(): RecentSpace[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(RECENT_KEY);
-    if (!raw) return [];
-    return (JSON.parse(raw) as RecentSpace[])
-      .filter((s) => s && typeof s.id === "string")
-      .sort((a, b) => b.lastSeen - a.lastSeen)
-      .slice(0, 6);
-  } catch {
-    return [];
-  }
-}
-
-function rememberSpace(id: string) {
-  if (typeof window === "undefined") return;
-  const existing = loadRecent().filter((s) => s.id !== id);
-  const next = [{ id, lastSeen: Date.now() }, ...existing].slice(0, 6);
-  localStorage.setItem(RECENT_KEY, JSON.stringify(next));
-}
-
 export default function HomePage() {
   const router = useRouter();
   const [step, setStep] = useState(0);
@@ -87,7 +64,7 @@ export default function HomePage() {
 
   useEffect(() => {
     setMounted(true);
-    setRecent(loadRecent());
+    setRecent(loadRecentSpaces());
   }, []);
 
   const stopPreview = () => {

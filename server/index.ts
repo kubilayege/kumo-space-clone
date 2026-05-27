@@ -1,6 +1,8 @@
 import { Server as HttpServer } from "http";
 import { Server, Socket } from "socket.io";
 import { v4 as uuidv4 } from "uuid";
+import * as fs from "fs";
+import * as path from "path";
 import { DrawStroke } from "../src/lib/annotations";
 import {
   AVATAR_COLORS,
@@ -28,6 +30,41 @@ const spaces = new Map<string, Map<string, User>>();
 const chatHistory = new Map<string, ChatMessage[]>();
 const annotationStrokes = new Map<string, Map<string, DrawStroke[]>>();
 const spaceMaps = new Map<string, OfficeMap>();
+
+// Custom maps are persisted to disk so edits survive process restarts. On
+// platforms with an ephemeral filesystem (e.g. Render free tier) this still
+// covers in-process restarts; clients also re-seed their last map on rejoin.
+const MAPS_FILE =
+  process.env.SPACE_MAPS_FILE ?? path.join(process.cwd(), "data", "space-maps.json");
+
+function loadMapsFromDisk() {
+  try {
+    const raw = fs.readFileSync(MAPS_FILE, "utf8");
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    for (const [id, rawMap] of Object.entries(parsed)) {
+      const map = sanitizeMap(rawMap);
+      if (map) spaceMaps.set(id, map);
+    }
+    console.log(`Loaded ${spaceMaps.size} custom space map(s) from disk`);
+  } catch {
+    // No file yet (or unreadable) — start empty.
+  }
+}
+
+let saveTimer: NodeJS.Timeout | null = null;
+function persistMapsSoon() {
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    saveTimer = null;
+    try {
+      fs.mkdirSync(path.dirname(MAPS_FILE), { recursive: true });
+      const payload = Object.fromEntries(spaceMaps.entries());
+      fs.writeFileSync(MAPS_FILE, JSON.stringify(payload), "utf8");
+    } catch (error) {
+      console.warn("Failed to persist space maps:", error);
+    }
+  }, 400);
+}
 
 const ZONE_TYPES = new Set(["open", "meeting", "focus", "lounge"]);
 
@@ -147,6 +184,7 @@ io.on("connection", (socket: Socket) => {
         messages: ChatMessage[];
         annotations: DrawStroke[];
         map: OfficeMap;
+        mapIsCustom: boolean;
       }) => void
     ) => {
       const { spaceId, name } = payload;
@@ -185,6 +223,7 @@ io.on("connection", (socket: Socket) => {
         messages: chatHistory.get(spaceId) ?? [],
         annotations: getSpaceAnnotations(spaceId),
         map: getSpaceMap(spaceId),
+        mapIsCustom: spaceMaps.has(spaceId),
       });
     }
   );
@@ -194,6 +233,7 @@ io.on("connection", (socket: Socket) => {
     const map = sanitizeMap(rawMap);
     if (!map) return;
     spaceMaps.set(currentSpaceId, map);
+    persistMapsSoon();
     io.to(currentSpaceId).emit("space:map", map);
   });
 
@@ -375,6 +415,8 @@ io.on("connection", (socket: Socket) => {
     broadcastUsers(io, currentSpaceId);
   });
 });
+
+loadMapsFromDisk();
 
 httpServer.listen(PORT, () => {
   console.log(`Socket server running on http://localhost:${PORT}`);
