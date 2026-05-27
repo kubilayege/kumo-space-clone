@@ -269,6 +269,7 @@ function StageTile({
           onClear={onClear}
           onColorChange={onColorChange}
           hideToolbar
+          videoRef={mediaRef}
         />
       )}
 

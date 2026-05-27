@@ -58,6 +58,7 @@ import {
   saveCachedMap,
 } from "@/lib/localSpaces";
 import { ConnectionState, WebRTCManager } from "@/lib/webrtc";
+import { startDesktopOverlay, stopDesktopOverlay } from "@/lib/desktop";
 
 interface SpaceRoomProps {
   spaceId: string;
@@ -703,9 +704,11 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
       await publishStream(hasTracks ? stream : null);
       broadcastMedia(micOn, camOn, false, false);
       setScreenSharing(false);
+      void stopDesktopOverlay();
       resumeMediaPlayback();
     } catch (err) {
       setScreenSharing(false);
+      void stopDesktopOverlay();
       setMediaError(
         err instanceof Error ? err.message : "Could not restore microphone after screen share"
       );
@@ -787,6 +790,23 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
         setBroadcastPreviewOpen(true);
         setSidebarOpen(true);
 
+        const selfId = getSocket().id;
+        if (selfId) {
+          const settings = screenTrack.getSettings() as MediaTrackSettings & {
+            displaySurface?: string;
+          };
+          void startDesktopOverlay({
+            spaceId,
+            userId: selfId,
+            source: {
+              displaySurface: settings.displaySurface,
+              label: screenTrack.label,
+              width: settings.width,
+              height: settings.height,
+            },
+          });
+        }
+
         await publishStream(stream);
         await applyScreenEncoding(screenShareQuality);
 
@@ -797,6 +817,7 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
         screenSharingRef.current = false;
         releaseShareTracks();
         setScreenSharing(false);
+        void stopDesktopOverlay();
       }
     },
     [

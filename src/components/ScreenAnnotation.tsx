@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { useCallback, useEffect, useRef } from "react";
+import { RefObject, useCallback, useEffect, useRef } from "react";
 import { AnnotationToolbar } from "@/components/AnnotationToolbar";
 import { DrawPoint, DrawStroke } from "@/lib/annotations";
 
@@ -19,6 +19,36 @@ interface ScreenAnnotationProps {
    * Use this when a parent stage docks its own toolbar in a more prominent slot.
    */
   hideToolbar?: boolean;
+  /**
+   * Ref to the underlying <video> element. If provided we normalise strokes
+   * against the visible video content (not the letterboxed tile), so coords
+   * remain stable across clients with different tile aspect ratios — and so
+   * the desktop overlay can paint them on the streamer's actual screen.
+   */
+  videoRef?: RefObject<HTMLVideoElement | null>;
+}
+
+type ContentBounds = { x: number; y: number; w: number; h: number };
+
+function computeContentBounds(
+  containerWidth: number,
+  containerHeight: number,
+  videoWidth: number,
+  videoHeight: number
+): ContentBounds {
+  if (!videoWidth || !videoHeight || containerWidth <= 0 || containerHeight <= 0) {
+    return { x: 0, y: 0, w: containerWidth, h: containerHeight };
+  }
+  const containerRatio = containerWidth / containerHeight;
+  const videoRatio = videoWidth / videoHeight;
+  if (videoRatio > containerRatio) {
+    const w = containerWidth;
+    const h = containerWidth / videoRatio;
+    return { x: 0, y: (containerHeight - h) / 2, w, h };
+  }
+  const h = containerHeight;
+  const w = containerHeight * videoRatio;
+  return { x: (containerWidth - w) / 2, y: 0, w, h };
 }
 
 function newStrokeId() {
@@ -31,8 +61,7 @@ function newStrokeId() {
 function drawStroke(
   ctx: CanvasRenderingContext2D,
   stroke: DrawStroke,
-  width: number,
-  height: number
+  bounds: ContentBounds
 ) {
   if (stroke.points.length < 2) return;
   ctx.strokeStyle = stroke.color;
@@ -41,10 +70,10 @@ function drawStroke(
   ctx.lineJoin = "round";
   ctx.beginPath();
   const first = stroke.points[0];
-  ctx.moveTo(first.x * width, first.y * height);
+  ctx.moveTo(bounds.x + first.x * bounds.w, bounds.y + first.y * bounds.h);
   for (let i = 1; i < stroke.points.length; i++) {
     const p = stroke.points[i];
-    ctx.lineTo(p.x * width, p.y * height);
+    ctx.lineTo(bounds.x + p.x * bounds.w, bounds.y + p.y * bounds.h);
   }
   ctx.stroke();
 }
@@ -59,11 +88,22 @@ export function ScreenAnnotation({
   onClear,
   onColorChange,
   hideToolbar = false,
+  videoRef,
 }: ScreenAnnotationProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const draftRef = useRef<DrawPoint[]>([]);
   const drawingRef = useRef(false);
+
+  const getContentBounds = useCallback(
+    (containerWidth: number, containerHeight: number): ContentBounds => {
+      const video = videoRef?.current;
+      const vw = video?.videoWidth ?? 0;
+      const vh = video?.videoHeight ?? 0;
+      return computeContentBounds(containerWidth, containerHeight, vw, vh);
+    },
+    [videoRef]
+  );
 
   const paint = useCallback(() => {
     const canvas = canvasRef.current;
@@ -84,8 +124,10 @@ export function ScreenAnnotation({
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, rect.width, rect.height);
 
+    const bounds = getContentBounds(rect.width, rect.height);
+
     for (const stroke of strokes) {
-      drawStroke(ctx, stroke, rect.width, rect.height);
+      drawStroke(ctx, stroke, bounds);
     }
 
     if (interactive && draftRef.current.length >= 2) {
@@ -100,11 +142,10 @@ export function ScreenAnnotation({
           width: 3,
           points: draftRef.current,
         },
-        rect.width,
-        rect.height
+        bounds
       );
     }
-  }, [activeColor, interactive, localUserId, strokes, targetId]);
+  }, [activeColor, getContentBounds, interactive, localUserId, strokes, targetId]);
 
   useEffect(() => {
     paint();
@@ -118,14 +159,33 @@ export function ScreenAnnotation({
     return () => observer.disconnect();
   }, [paint]);
 
+  // Repaint when the video reports new intrinsic dimensions (e.g. when the
+  // remote stream's resolution changes), otherwise content-relative strokes
+  // stay anchored to the previous letterbox geometry.
+  useEffect(() => {
+    const video = videoRef?.current;
+    if (!video) return;
+    const handle = () => paint();
+    video.addEventListener("loadedmetadata", handle);
+    video.addEventListener("resize", handle);
+    return () => {
+      video.removeEventListener("loadedmetadata", handle);
+      video.removeEventListener("resize", handle);
+    };
+  }, [paint, videoRef]);
+
   const pointerToNorm = (event: React.PointerEvent<HTMLCanvasElement>): DrawPoint | null => {
     const canvas = canvasRef.current;
     if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return null;
+    const bounds = getContentBounds(rect.width, rect.height);
+    if (bounds.w <= 0 || bounds.h <= 0) return null;
+    const px = event.clientX - rect.left - bounds.x;
+    const py = event.clientY - rect.top - bounds.y;
     return {
-      x: Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)),
-      y: Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height)),
+      x: Math.min(1, Math.max(0, px / bounds.w)),
+      y: Math.min(1, Math.max(0, py / bounds.h)),
     };
   };
 

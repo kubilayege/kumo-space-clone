@@ -2,6 +2,7 @@
   "name": "kumo-space-clone",
   "version": "0.1.0",
   "private": true,
+  "main": "electron/main.js",
   "scripts": {
     "dev": "concurrently \"npm run dev:next\" \"npm run dev:server\"",
     "dev:next": "next dev",
@@ -9,7 +10,58 @@
     "build": "next build",
     "start": "concurrently \"next start\" \"npm run start:server\"",
     "start:server": "tsx server/index.ts",
-    "lint": "next lint"
+    "lint": "next lint",
+    "electron": "electron .",
+    "electron:dev": "concurrently -k -n next,server,electron -c blue,magenta,green \"npm run dev:next\" \"npm run dev:server\" \"wait-on http://localhost:3000 && ELECTRON_DEV=1 electron .\"",
+    "electron:pack": "electron-builder --dir",
+    "electron:build:mac": "electron-builder --mac",
+    "electron:build:win": "electron-builder --win",
+    "electron:build:all": "electron-builder --mac --win"
+  },
+  "build": {
+    "appId": "com.kumospace.clone",
+    "productName": "Kumo Space",
+    "asar": true,
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraMetadata": {
+      "main": "electron/main.js"
+    },
+    "mac": {
+      "category": "public.app-category.social-networking",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["arm64", "x64"]
+        }
+      ],
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "identity": null,
+      "extendInfo": {
+        "NSCameraUsageDescription": "Kumo Space uses your camera so others can see you in the space.",
+        "NSMicrophoneUsageDescription": "Kumo Space uses your microphone for spatial voice chat.",
+        "NSScreenCaptureUsageDescription": "Kumo Space captures your screen when you share it with the room."
+      }
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false
+    }
   },
   "dependencies": {
     "clsx": "^2.1.1",
@@ -30,9 +82,12 @@
     "@types/react-dom": "^19.1.5",
     "@types/uuid": "^10.0.0",
     "concurrently": "^9.1.2",
+    "electron": "^42.3.0",
+    "electron-builder": "^26.8.1",
     "eslint": "^9.27.0",
     "eslint-config-next": "^15.3.3",
     "tailwindcss": "^4.1.8",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "wait-on": "^9.0.10"
   }
 }

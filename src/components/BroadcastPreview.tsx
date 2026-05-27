@@ -83,6 +83,7 @@ export function BroadcastPreview({
               onStroke={() => {}}
               onClear={onClear}
               onColorChange={() => {}}
+              videoRef={videoRef}
             />
           )}
         </div>

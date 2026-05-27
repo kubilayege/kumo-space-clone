@@ -228,6 +228,20 @@ io.on("connection", (socket: Socket) => {
     }
   );
 
+  socket.on(
+    "space:observe",
+    (
+      payload: { spaceId: string },
+      callback?: (response: { annotations: DrawStroke[] }) => void
+    ) => {
+      const { spaceId } = payload ?? {};
+      if (!spaceId) return;
+      currentSpaceId = spaceId;
+      socket.join(spaceId);
+      callback?.({ annotations: getSpaceAnnotations(spaceId) });
+    }
+  );
+
   socket.on("space:map:set", (rawMap: unknown) => {
     if (!currentSpaceId) return;
     const map = sanitizeMap(rawMap);
