@@ -32,6 +32,7 @@ import {
 import {
   ScreenShareSurface,
   captureDisplay,
+  isScreenShareSupported,
   clearVideoTracks,
   setStreamAudioTracks,
   swapVideoTrack,
@@ -99,6 +100,7 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [officeMap, setOfficeMap] = useState<OfficeMap>(DEFAULT_OFFICE);
+  const [screenShareSupported, setScreenShareSupported] = useState(true);
 
   const keysPressed = useRef(new Set<string>());
   const positionRef = useRef({ x: 600, y: 440 });
@@ -127,6 +129,7 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
 
   useEffect(() => {
     setScreenShareQuality(loadScreenShareQuality());
+    setScreenShareSupported(isScreenShareSupported());
   }, []);
 
   const applyScreenEncoding = useCallback(async (qualityId: ScreenShareQualityId) => {
@@ -699,6 +702,12 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
 
   const startScreenShare = useCallback(
     async (surface?: ScreenShareSurface) => {
+      if (!isScreenShareSupported()) {
+        setMediaError(
+          "Screen sharing isn't available on this browser. Open the space on a desktop browser (Chrome, Edge, or Firefox) to share your screen."
+        );
+        return;
+      }
       try {
         const preset = getScreenShareQualityPreset(screenShareQuality);
         const displayStream = await captureDisplay(surface, preset);
@@ -1112,6 +1121,7 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
             micEnabled={micEnabled}
             cameraEnabled={cameraEnabled}
             screenSharing={screenSharing}
+            screenShareSupported={screenShareSupported}
             anyonePresenting={anyonePresenting}
             annotateDrawing={annotateDrawing}
             onToggleAnnotateDrawing={() => {

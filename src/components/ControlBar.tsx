@@ -32,6 +32,7 @@ interface ControlBarProps {
   micEnabled: boolean;
   cameraEnabled: boolean;
   screenSharing: boolean;
+  screenShareSupported?: boolean;
   screenShareQuality: ScreenShareQualityId;
   onScreenShareQualityChange: (quality: ScreenShareQualityId) => void;
   sidebarOpen: boolean;
@@ -87,6 +88,7 @@ export function ControlBar({
   micEnabled,
   cameraEnabled,
   screenSharing,
+  screenShareSupported = true,
   screenShareQuality,
   onScreenShareQualityChange,
   sidebarOpen,
@@ -223,6 +225,16 @@ export function ControlBar({
                 </div>
               )}
             </>
+          ) : !screenShareSupported ? (
+            <button
+              type="button"
+              onClick={() => onStartScreenShare()}
+              title="Screen sharing needs a desktop browser"
+              aria-label="Screen sharing unavailable on this device"
+              className="flex h-9 w-9 items-center justify-center rounded-full text-[var(--ink-faint)] transition hover:bg-[var(--paper-2)] sm:h-10 sm:w-10"
+            >
+              <Monitor className="h-4 w-4" strokeWidth={2.2} />
+            </button>
           ) : (
             <>
               <ToggleButton

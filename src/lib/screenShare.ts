@@ -41,6 +41,17 @@ export function classifyAudioTrack(track: MediaStreamTrack): AudioTrackKind {
   return "mic";
 }
 
+// Screen capture relies on getDisplayMedia, which mobile browsers (iOS Safari,
+// Android Chrome) do not implement. Detect it so the UI can degrade gracefully
+// instead of failing silently when the user taps Share.
+export function isScreenShareSupported(): boolean {
+  return (
+    typeof navigator !== "undefined" &&
+    !!navigator.mediaDevices &&
+    typeof navigator.mediaDevices.getDisplayMedia === "function"
+  );
+}
+
 export async function captureDisplay(
   surface: ScreenShareSurface | undefined,
   quality: ScreenShareQualityPreset
