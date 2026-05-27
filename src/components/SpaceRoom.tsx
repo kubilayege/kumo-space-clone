@@ -915,7 +915,7 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
 
   if (error || !localUser) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center gap-4 bg-[var(--paper)] px-6 text-center">
+      <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 bg-[var(--paper)] px-6 text-center">
         <div className="rounded-2xl border border-[var(--accent)]/25 bg-[var(--accent-soft)] px-6 py-5">
           <p className="text-sm text-[var(--accent-hover)]">{error ?? "Unable to join space"}</p>
         </div>
@@ -932,7 +932,7 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
   const onlineCount = users.length;
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-[var(--paper)]">
+    <div className="relative h-[100dvh] w-screen overflow-hidden bg-[var(--paper)]">
       <SpatialAudio
         localUser={localUser}
         users={users}
@@ -1245,7 +1245,7 @@ function OnlineUsersChip({ users, localUserId }: { users: User[]; localUserId: s
 
 function LoadingState() {
   return (
-    <div className="relative flex h-screen items-center justify-center overflow-hidden bg-[var(--paper)]">
+    <div className="relative flex h-[100dvh] items-center justify-center overflow-hidden bg-[var(--paper)]">
       <div className="pointer-events-none absolute inset-0 dot-grid opacity-50" />
       <div className="relative flex flex-col items-center gap-4">
         <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--accent)] shadow-[var(--shadow-lg)]">

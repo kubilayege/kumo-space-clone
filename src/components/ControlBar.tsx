@@ -135,15 +135,15 @@ export function ControlBar({
   };
 
   return (
-    <div className="pointer-events-none absolute bottom-6 left-1/2 z-40 -translate-x-1/2">
-      <div className="pointer-events-auto flex items-center gap-1 rounded-full border border-[var(--line)] bg-[var(--surface)] p-2 shadow-[var(--shadow-lg)]">
+    <div className="pointer-events-none absolute bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-1/2 z-40 -translate-x-1/2 sm:bottom-6">
+      <div className="pointer-events-auto flex max-w-[calc(100vw-1rem)] items-center gap-0.5 rounded-full border border-[var(--line)] bg-[var(--surface)] p-1.5 shadow-[var(--shadow-lg)] sm:gap-1 sm:p-2">
         <div ref={statusRef} className="relative">
           <button
             onClick={() => setStatusOpen((v) => !v)}
-            className="flex items-center gap-2 rounded-full px-3 py-2 text-[12px] font-medium text-[var(--ink-2)] transition hover:bg-[var(--paper-2)]"
+            className="flex items-center gap-1.5 rounded-full px-2.5 py-2 text-[12px] font-medium text-[var(--ink-2)] transition hover:bg-[var(--paper-2)] sm:gap-2 sm:px-3"
           >
             <span className={clsx("h-2 w-2 rounded-full", currentStatus.dotClass)} />
-            <span>{currentStatus.label}</span>
+            <span className="hidden sm:inline">{currentStatus.label}</span>
             <ChevronDown
               className={clsx(
                 "h-3 w-3 text-[var(--ink-faint)] transition-transform",
@@ -200,10 +200,10 @@ export function ControlBar({
               <button
                 type="button"
                 onClick={onStopScreenShare}
-                className="flex h-9 items-center gap-2 rounded-full bg-[var(--accent-soft)] px-3 text-[12px] font-semibold text-[var(--accent-hover)] ring-1 ring-[var(--accent)]/30 transition hover:bg-[var(--accent)]/15"
+                className="flex h-9 items-center gap-2 rounded-full bg-[var(--accent-soft)] px-2.5 text-[12px] font-semibold text-[var(--accent-hover)] ring-1 ring-[var(--accent)]/30 transition hover:bg-[var(--accent)]/15 sm:px-3"
               >
                 <MonitorOff className="h-4 w-4" />
-                Stop sharing
+                <span className="hidden sm:inline">Stop sharing</span>
               </button>
               <ToggleButton
                 active={qualityOpen}
@@ -306,10 +306,10 @@ export function ControlBar({
 
         <button
           onClick={onLeave}
-          className="group flex h-9 items-center gap-1.5 rounded-full px-3 text-[12px] font-medium text-[var(--accent)] transition hover:bg-[var(--accent-soft)]"
+          className="group flex h-9 items-center gap-1.5 rounded-full px-2.5 text-[12px] font-medium text-[var(--accent)] transition hover:bg-[var(--accent-soft)] sm:px-3"
         >
           <LogOut className="h-3.5 w-3.5" />
-          Leave
+          <span className="hidden sm:inline">Leave</span>
         </button>
       </div>
     </div>
@@ -388,7 +388,7 @@ function ToggleButton({
       aria-label={label}
       disabled={disabled}
       className={clsx(
-        "flex h-10 w-10 items-center justify-center rounded-full transition",
+        "flex h-9 w-9 items-center justify-center rounded-full transition sm:h-10 sm:w-10",
         disabled && "cursor-not-allowed opacity-40",
         active ? activeStyle : inactiveStyle
       )}
