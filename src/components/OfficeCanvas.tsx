@@ -22,31 +22,23 @@ interface OfficeCanvasProps {
 
 const ZONE_STYLES: Record<
   RoomZone["type"],
-  { bg: string; border: string; accent: string; label: string }
+  { bg: string; label: string }
 > = {
   open: {
-    bg: "from-indigo-500/[0.07] to-indigo-500/[0.02]",
-    border: "border-indigo-300/15",
-    accent: "text-indigo-200",
-    label: "bg-indigo-500/15 text-indigo-100 border-indigo-300/20",
+    bg: "var(--room)",
+    label: "text-[var(--ink-2)]",
   },
   meeting: {
-    bg: "from-amber-500/[0.08] to-amber-500/[0.02]",
-    border: "border-amber-300/20",
-    accent: "text-amber-200",
-    label: "bg-amber-500/15 text-amber-100 border-amber-300/25",
+    bg: "var(--room-warm)",
+    label: "text-[var(--ink-2)]",
   },
   focus: {
-    bg: "from-emerald-500/[0.07] to-emerald-500/[0.02]",
-    border: "border-emerald-300/15",
-    accent: "text-emerald-200",
-    label: "bg-emerald-500/15 text-emerald-100 border-emerald-300/20",
+    bg: "var(--room-warm)",
+    label: "text-[var(--ink-2)]",
   },
   lounge: {
-    bg: "from-fuchsia-500/[0.06] to-fuchsia-500/[0.02]",
-    border: "border-fuchsia-300/15",
-    accent: "text-fuchsia-200",
-    label: "bg-fuchsia-500/15 text-fuchsia-100 border-fuchsia-300/20",
+    bg: "var(--room)",
+    label: "text-[var(--ink-2)]",
   },
 };
 
@@ -86,14 +78,10 @@ export function OfficeCanvas({ users, localUser, onMove }: OfficeCanvasProps) {
   return (
     <div
       ref={containerRef}
-      className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-3xl border border-white/[0.06] bg-[#0a0a14] p-6 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]"
+      className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-[14px] border border-[var(--line-2)] bg-[var(--floor)] p-6 shadow-[var(--shadow-md)]"
     >
       {/* Floor pattern */}
-      <div className="pointer-events-none absolute inset-0 opacity-60 floor-pattern" />
-
-      {/* Ambient glow */}
-      <div className="pointer-events-none absolute -left-32 top-1/4 h-96 w-96 rounded-full bg-indigo-600/[0.05] blur-3xl" />
-      <div className="pointer-events-none absolute -right-32 bottom-1/4 h-96 w-96 rounded-full bg-fuchsia-600/[0.04] blur-3xl" />
+      <div className="pointer-events-none absolute inset-0 floor-pattern" />
 
       <div
         ref={worldRef}
@@ -106,9 +94,6 @@ export function OfficeCanvas({ users, localUser, onMove }: OfficeCanvasProps) {
         }}
         onClick={handleCanvasClick}
       >
-        {/* Floor base */}
-        <div className="absolute inset-0 rounded-[32px] bg-gradient-to-br from-[#0f0f1e] via-[#0c0c18] to-[#0a0a14] shadow-[inset_0_0_120px_rgba(0,0,0,0.6)] ring-1 ring-white/[0.04]" />
-
         {/* Zones */}
         {map.zones.map((zone) => (
           <ZoneCard key={zone.id} zone={zone} />
@@ -122,8 +107,8 @@ export function OfficeCanvas({ users, localUser, onMove }: OfficeCanvasProps) {
             width: SCREEN_SHARE_RANGE * 2,
             height: SCREEN_SHARE_RANGE * 2,
             background:
-              "radial-gradient(circle, rgba(139,92,246,0.06) 0%, rgba(139,92,246,0.02) 55%, transparent 100%)",
-            border: "1px dashed rgba(139,92,246,0.12)",
+              "radial-gradient(circle, rgba(226,90,60,0.05) 0%, rgba(226,90,60,0.015) 55%, transparent 100%)",
+            border: "1px dashed rgba(226,90,60,0.14)",
           }}
         />
 
@@ -135,8 +120,8 @@ export function OfficeCanvas({ users, localUser, onMove }: OfficeCanvasProps) {
             width: AUDIO_RANGE * 2,
             height: AUDIO_RANGE * 2,
             background:
-              "radial-gradient(circle, rgba(129,140,248,0.10) 0%, rgba(129,140,248,0.04) 60%, transparent 100%)",
-            border: "1px dashed rgba(129,140,248,0.25)",
+              "radial-gradient(circle, rgba(226,90,60,0.10) 0%, rgba(226,90,60,0.04) 60%, transparent 100%)",
+            border: "1.5px dashed var(--accent)",
           }}
         />
 
@@ -180,9 +165,12 @@ export function OfficeCanvas({ users, localUser, onMove }: OfficeCanvasProps) {
       </div>
 
       {/* Floor info pill */}
-      <div className="pointer-events-none absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full border border-white/[0.06] bg-black/40 px-3 py-1.5 text-[11px] text-zinc-400 backdrop-blur">
-        <span className="font-medium text-zinc-300">WASD</span> to move ·{" "}
-        <span className="font-medium text-zinc-300">click</span> to walk · inner ring = voice · outer = screen fades out
+      <div className="pointer-events-none absolute bottom-5 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1.5 text-[11px] text-[var(--ink-soft)] shadow-[var(--shadow-sm)]">
+        <span className="vs-kbd">W</span>
+        <span className="vs-kbd">A</span>
+        <span className="vs-kbd">S</span>
+        <span className="vs-kbd">D</span>
+        <span className="ml-1">or click to walk · inner ring = voice · outer = screen fades</span>
       </div>
     </div>
   );
@@ -193,22 +181,19 @@ function ZoneCard({ zone }: { zone: RoomZone }) {
 
   return (
     <div
-      className={clsx(
-        "absolute overflow-hidden rounded-3xl border bg-gradient-to-br shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)]",
-        style.bg,
-        style.border
-      )}
+      className="absolute overflow-hidden rounded-[4px] border-[1.5px] border-[var(--wall-2)]"
       style={{
         left: zone.x,
         top: zone.y,
         width: zone.width,
         height: zone.height,
+        background: style.bg,
       }}
     >
       {/* Zone name label */}
       <div
         className={clsx(
-          "absolute left-4 top-3 z-10 rounded-full border px-3 py-1 text-[11px] font-medium backdrop-blur-sm",
+          "absolute left-3.5 top-2.5 z-10 text-[11px] font-semibold uppercase tracking-[0.06em]",
           style.label
         )}
       >
@@ -240,8 +225,8 @@ function ZoneFurniture({ zone }: { zone: RoomZone }) {
           width={140}
           height={44}
           rx={10}
-          fill="rgba(251, 191, 36, 0.18)"
-          stroke="rgba(251, 191, 36, 0.35)"
+          fill="rgba(181, 158, 112, 0.18)"
+          stroke="rgba(181, 158, 112, 0.35)"
           strokeWidth="1.5"
         />
         {/* Chairs around */}
@@ -253,7 +238,7 @@ function ZoneFurniture({ zone }: { zone: RoomZone }) {
               width={18}
               height={14}
               rx={4}
-              fill="rgba(251, 191, 36, 0.22)"
+              fill="rgba(181, 158, 112, 0.22)"
             />
             <rect
               x={cx + offset - 9}
@@ -261,7 +246,7 @@ function ZoneFurniture({ zone }: { zone: RoomZone }) {
               width={18}
               height={14}
               rx={4}
-              fill="rgba(251, 191, 36, 0.22)"
+              fill="rgba(181, 158, 112, 0.22)"
             />
           </g>
         ))}
@@ -284,8 +269,8 @@ function ZoneFurniture({ zone }: { zone: RoomZone }) {
           width={60}
           height={28}
           rx={6}
-          fill="rgba(74, 222, 128, 0.18)"
-          stroke="rgba(74, 222, 128, 0.32)"
+          fill="rgba(108, 143, 90, 0.18)"
+          stroke="rgba(108, 143, 90, 0.32)"
           strokeWidth="1.5"
         />
         {/* Monitor */}
@@ -295,7 +280,7 @@ function ZoneFurniture({ zone }: { zone: RoomZone }) {
           width={32}
           height={14}
           rx={3}
-          fill="rgba(74, 222, 128, 0.32)"
+          fill="rgba(108, 143, 90, 0.32)"
         />
         {/* Chair */}
         <rect
@@ -304,7 +289,7 @@ function ZoneFurniture({ zone }: { zone: RoomZone }) {
           width={24}
           height={14}
           rx={4}
-          fill="rgba(74, 222, 128, 0.22)"
+          fill="rgba(108, 143, 90, 0.22)"
         />
       </svg>
     );
@@ -325,8 +310,8 @@ function ZoneFurniture({ zone }: { zone: RoomZone }) {
           width={160}
           height={48}
           rx={14}
-          fill="rgba(232, 121, 249, 0.16)"
-          stroke="rgba(232, 121, 249, 0.30)"
+          fill="rgba(139, 85, 119, 0.16)"
+          stroke="rgba(139, 85, 119, 0.30)"
           strokeWidth="1.5"
         />
         {/* Cushions */}
@@ -336,7 +321,7 @@ function ZoneFurniture({ zone }: { zone: RoomZone }) {
           width={50}
           height={20}
           rx={6}
-          fill="rgba(232, 121, 249, 0.25)"
+          fill="rgba(139, 85, 119, 0.25)"
         />
         <rect
           x={cx - 10}
@@ -344,20 +329,20 @@ function ZoneFurniture({ zone }: { zone: RoomZone }) {
           width={50}
           height={20}
           rx={6}
-          fill="rgba(232, 121, 249, 0.25)"
+          fill="rgba(139, 85, 119, 0.25)"
         />
         {/* Plant left */}
-        <circle cx={26} cy={zone.height - 30} r={10} fill="rgba(34, 197, 94, 0.25)" />
-        <rect x={22} y={zone.height - 22} width={8} height={14} rx={2} fill="rgba(120, 53, 15, 0.35)" />
+        <circle cx={26} cy={zone.height - 30} r={10} fill="rgba(108, 143, 90, 0.25)" />
+        <rect x={22} y={zone.height - 22} width={8} height={14} rx={2} fill="rgba(164, 104, 58, 0.35)" />
         {/* Plant right */}
-        <circle cx={zone.width - 26} cy={30} r={10} fill="rgba(34, 197, 94, 0.25)" />
+        <circle cx={zone.width - 26} cy={30} r={10} fill="rgba(108, 143, 90, 0.25)" />
         <rect
           x={zone.width - 30}
           y={38}
           width={8}
           height={14}
           rx={2}
-          fill="rgba(120, 53, 15, 0.35)"
+          fill="rgba(164, 104, 58, 0.35)"
         />
       </svg>
     );
@@ -385,8 +370,8 @@ function ZoneFurniture({ zone }: { zone: RoomZone }) {
                 width={56}
                 height={22}
                 rx={5}
-                fill="rgba(129, 140, 248, 0.15)"
-                stroke="rgba(129, 140, 248, 0.28)"
+                fill="rgba(181, 158, 112, 0.15)"
+                stroke="rgba(181, 158, 112, 0.28)"
                 strokeWidth="1.2"
               />
               <rect
@@ -395,7 +380,7 @@ function ZoneFurniture({ zone }: { zone: RoomZone }) {
                 width={28}
                 height={10}
                 rx={2}
-                fill="rgba(129, 140, 248, 0.28)"
+                fill="rgba(181, 158, 112, 0.28)"
               />
             </g>
           );

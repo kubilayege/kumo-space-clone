@@ -132,7 +132,7 @@ export function ResizableSidebar({
     <>
       {open && (
         <div
-          className="fixed inset-0 z-30 bg-black/60 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-30 bg-[rgba(28,24,20,0.45)] backdrop-blur-sm lg:hidden"
           onClick={onClose}
         />
       )}
@@ -140,7 +140,7 @@ export function ResizableSidebar({
         id="activity-sidebar-panel"
         style={{ width: open ? width : 0 }}
         className={clsx(
-          "z-40 flex h-full shrink-0 flex-col border-l border-white/[0.06] bg-[#0a0a14]/95 backdrop-blur-xl",
+          "z-40 flex h-full shrink-0 flex-col border-l border-[var(--line)] bg-[var(--paper)]",
           "fixed inset-y-0 right-0 lg:static",
           open ? "translate-x-0" : "translate-x-full lg:translate-x-0",
           !isDragging && "transition-[width,transform] duration-200 ease-out"
@@ -151,7 +151,7 @@ export function ResizableSidebar({
             role="separator"
             aria-orientation="vertical"
             onPointerDown={onWidthPointerDown}
-            className="absolute -left-1.5 top-0 z-50 flex h-full w-3 cursor-col-resize items-center justify-center text-zinc-500 hover:text-zinc-300"
+            className="absolute -left-1.5 top-0 z-50 flex h-full w-3 cursor-col-resize items-center justify-center text-[var(--ink-faint)] hover:text-[var(--ink-2)]"
           >
             <GripVertical className="h-4 w-4 opacity-60" />
           </div>
@@ -164,7 +164,7 @@ export function ResizableSidebar({
             <div
               className={clsx(
                 "flex min-h-0 flex-col overflow-hidden",
-                presenting ? "bg-[#08080f]" : "px-0 pt-3"
+                presenting ? "bg-[var(--paper-2)]" : "px-0 pt-3"
               )}
               style={
                 chatCollapsed
@@ -180,7 +180,7 @@ export function ResizableSidebar({
                 type="button"
                 onClick={toggleChatCollapsed}
                 style={{ height: COLLAPSED_CHAT_HEIGHT }}
-                className="flex shrink-0 items-center justify-between gap-2 border-t border-white/[0.06] bg-white/[0.02] px-3 text-[11px] font-medium text-zinc-400 transition hover:bg-white/[0.04] hover:text-white"
+                className="flex shrink-0 items-center justify-between gap-2 border-t border-[var(--line)] bg-[var(--surface-2)] px-3 text-[11px] font-medium text-[var(--ink-soft)] transition hover:bg-[var(--paper-2)] hover:text-[var(--ink)]"
                 aria-label="Expand chat"
                 title="Expand chat"
               >
@@ -196,7 +196,7 @@ export function ResizableSidebar({
                   role="separator"
                   aria-orientation="horizontal"
                   onPointerDown={onSplitPointerDown}
-                  className="group relative flex h-3 shrink-0 cursor-row-resize items-center justify-center border-y border-white/[0.05] bg-white/[0.02] text-zinc-600 hover:bg-white/[0.04] hover:text-zinc-400"
+                  className="group relative flex h-3 shrink-0 cursor-row-resize items-center justify-center border-y border-[var(--line)] bg-[var(--surface-2)] text-[var(--ink-faint)] hover:bg-[var(--paper-2)] hover:text-[var(--ink-soft)]"
                 >
                   <GripHorizontal className="h-3 w-3" />
                   {presenting && (
@@ -209,7 +209,7 @@ export function ResizableSidebar({
                         event.stopPropagation();
                         toggleChatCollapsed();
                       }}
-                      className="absolute right-2 flex h-4 items-center gap-1 rounded-md border border-white/[0.08] bg-[#0a0a14]/80 px-1.5 text-[10px] font-medium text-zinc-400 backdrop-blur-md transition hover:bg-white/[0.08] hover:text-white"
+                      className="absolute right-2 flex h-4 items-center gap-1 rounded-md border border-[var(--line-2)] bg-[var(--surface)] px-1.5 text-[10px] font-medium text-[var(--ink-soft)] transition hover:bg-[var(--paper-2)] hover:text-[var(--ink)]"
                       title="Collapse chat"
                       aria-label="Collapse chat"
                     >

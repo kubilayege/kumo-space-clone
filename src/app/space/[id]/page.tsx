@@ -11,7 +11,7 @@ export default async function SpacePage({ params }: SpacePageProps) {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-[#0f0f14] text-zinc-300">
+        <div className="flex min-h-screen items-center justify-center bg-[var(--paper)] text-[var(--ink-soft)]">
           Loading space...
         </div>
       }

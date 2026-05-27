@@ -64,16 +64,16 @@ export interface OfficeMap {
 }
 
 export const AVATAR_COLORS = [
-  "#6366f1",
-  "#8b5cf6",
-  "#ec4899",
-  "#f43f5e",
-  "#f97316",
-  "#eab308",
-  "#22c55e",
-  "#14b8a6",
-  "#06b6d4",
-  "#3b82f6",
+  "#e25a3c", // coral
+  "#3f8e8a", // teal
+  "#c99136", // gold
+  "#8b5577", // plum
+  "#6c8f5a", // sage
+  "#4a7aae", // sky
+  "#c94a2e", // deep coral
+  "#5a7d6e", // pine
+  "#a4683a", // clay
+  "#7a6aa0", // iris
 ];
 
 export const AUDIO_RANGE = 180;

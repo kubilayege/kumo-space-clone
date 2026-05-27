@@ -51,9 +51,9 @@ interface ControlBarProps {
 }
 
 const STATUSES: { value: UserStatus; label: string; dotClass: string }[] = [
-  { value: "available", label: "Available", dotClass: "bg-emerald-400" },
-  { value: "busy", label: "Busy", dotClass: "bg-rose-400" },
-  { value: "away", label: "Away", dotClass: "bg-amber-400" },
+  { value: "available", label: "Available", dotClass: "bg-[var(--status-ok)]" },
+  { value: "busy", label: "Busy", dotClass: "bg-[var(--status-busy)]" },
+  { value: "away", label: "Away", dotClass: "bg-[var(--status-away)]" },
 ];
 
 const SHARE_OPTIONS: {
@@ -136,24 +136,24 @@ export function ControlBar({
 
   return (
     <div className="pointer-events-none absolute bottom-6 left-1/2 z-40 -translate-x-1/2">
-      <div className="pointer-events-auto flex items-center gap-1 rounded-2xl border border-white/[0.08] bg-black/55 p-1.5 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] backdrop-blur-xl">
+      <div className="pointer-events-auto flex items-center gap-1 rounded-full border border-[var(--line)] bg-[var(--surface)] p-2 shadow-[var(--shadow-lg)]">
         <div ref={statusRef} className="relative">
           <button
             onClick={() => setStatusOpen((v) => !v)}
-            className="flex items-center gap-2 rounded-xl px-3 py-2 text-[12px] font-medium text-zinc-200 transition hover:bg-white/[0.06]"
+            className="flex items-center gap-2 rounded-full px-3 py-2 text-[12px] font-medium text-[var(--ink-2)] transition hover:bg-[var(--paper-2)]"
           >
             <span className={clsx("h-2 w-2 rounded-full", currentStatus.dotClass)} />
             <span>{currentStatus.label}</span>
             <ChevronDown
               className={clsx(
-                "h-3 w-3 text-zinc-400 transition-transform",
+                "h-3 w-3 text-[var(--ink-faint)] transition-transform",
                 statusOpen && "rotate-180"
               )}
             />
           </button>
 
           {statusOpen && (
-            <div className="absolute bottom-full left-0 mb-2 min-w-[160px] origin-bottom-left rounded-xl border border-white/[0.08] bg-[#11111c]/95 p-1 shadow-2xl backdrop-blur-xl animate-scale-in">
+            <div className="absolute bottom-full left-0 mb-2 min-w-[160px] origin-bottom-left rounded-xl border border-[var(--line)] bg-[var(--surface)] p-1 shadow-[var(--shadow-pop)] animate-scale-in">
               {STATUSES.map((status) => (
                 <button
                   key={status.value}
@@ -161,14 +161,14 @@ export function ControlBar({
                     onStatusChange(status.value);
                     setStatusOpen(false);
                   }}
-                  className="flex w-full items-center justify-between gap-3 rounded-lg px-2.5 py-2 text-left text-[12px] font-medium text-zinc-200 transition hover:bg-white/[0.06]"
+                  className="flex w-full items-center justify-between gap-3 rounded-lg px-2.5 py-2 text-left text-[12px] font-medium text-[var(--ink-2)] transition hover:bg-[var(--paper-2)]"
                 >
                   <span className="flex items-center gap-2">
                     <span className={clsx("h-2 w-2 rounded-full", status.dotClass)} />
                     {status.label}
                   </span>
                   {status.value === currentStatus.value && (
-                    <Check className="h-3.5 w-3.5 text-indigo-300" />
+                    <Check className="h-3.5 w-3.5 text-[var(--accent)]" />
                   )}
                 </button>
               ))}
@@ -200,7 +200,7 @@ export function ControlBar({
               <button
                 type="button"
                 onClick={onStopScreenShare}
-                className="flex h-9 items-center gap-2 rounded-xl bg-rose-500/20 px-3 text-[12px] font-semibold text-rose-100 ring-1 ring-rose-400/35 transition hover:bg-rose-500/30"
+                className="flex h-9 items-center gap-2 rounded-full bg-[var(--accent-soft)] px-3 text-[12px] font-semibold text-[var(--accent-hover)] ring-1 ring-[var(--accent)]/30 transition hover:bg-[var(--accent)]/15"
               >
                 <MonitorOff className="h-4 w-4" />
                 Stop sharing
@@ -210,10 +210,10 @@ export function ControlBar({
                 onClick={() => setQualityOpen((v) => !v)}
                 label="Stream quality"
                 icon={SlidersHorizontal}
-                tone="violet"
+                tone="accent"
               />
               {qualityOpen && (
-                <div className="absolute bottom-full left-1/2 mb-2 w-[240px] -translate-x-1/2 origin-bottom rounded-xl border border-white/[0.08] bg-[#11111c]/95 shadow-2xl backdrop-blur-xl animate-scale-in">
+                <div className="absolute bottom-full left-1/2 mb-2 w-[240px] -translate-x-1/2 origin-bottom rounded-xl border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow-pop)] animate-scale-in">
                   <ShareQualityPanel
                     quality={screenShareQuality}
                     onChange={(id) => {
@@ -230,40 +230,40 @@ export function ControlBar({
                 onClick={() => setShareOpen((v) => !v)}
                 label="Share screen"
                 icon={Monitor}
-                tone="violet"
+                tone="accent"
               />
               {shareOpen && (
-                <div className="absolute bottom-full left-1/2 mb-2 w-[240px] -translate-x-1/2 origin-bottom rounded-xl border border-white/[0.08] bg-[#11111c]/95 p-1 shadow-2xl backdrop-blur-xl animate-scale-in">
+                <div className="absolute bottom-full left-1/2 mb-2 w-[240px] -translate-x-1/2 origin-bottom rounded-xl border border-[var(--line)] bg-[var(--surface)] p-1 shadow-[var(--shadow-pop)] animate-scale-in">
                   <ShareQualityPanel
                     quality={screenShareQuality}
                     onChange={onScreenShareQualityChange}
-                    className="border-b border-white/[0.06] pb-1"
+                    className="border-b border-[var(--line)] pb-1"
                   />
                   {SHARE_OPTIONS.map((option) => (
                     <button
                       key={option.label}
                       onClick={() => handleSharePick(option.surface)}
-                      className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-left transition hover:bg-white/[0.06]"
+                      className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-left transition hover:bg-[var(--paper-2)]"
                     >
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/15 text-violet-200">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--accent-soft)] text-[var(--accent)]">
                         <option.icon className="h-4 w-4" />
                       </span>
                       <span>
-                        <span className="block text-[12px] font-medium text-white">
+                        <span className="block text-[12px] font-medium text-[var(--ink)]">
                           {option.label}
                         </span>
-                        <span className="block text-[10px] text-zinc-500">{option.hint}</span>
+                        <span className="block text-[10px] text-[var(--ink-faint)]">{option.hint}</span>
                       </span>
                     </button>
                   ))}
-                  <div className="my-1 h-px bg-white/[0.06]" />
+                  <div className="my-1 h-px bg-[var(--line)]" />
                   <button
                     onClick={() => handleSharePick()}
-                    className="w-full rounded-lg px-2.5 py-2 text-left text-[11px] font-medium text-zinc-400 transition hover:bg-white/[0.06] hover:text-zinc-200"
+                    className="w-full rounded-lg px-2.5 py-2 text-left text-[11px] font-medium text-[var(--ink-soft)] transition hover:bg-[var(--paper-2)] hover:text-[var(--ink)]"
                   >
                     Or choose in system picker…
                   </button>
-                  <p className="px-2.5 pb-1 pt-1 text-[10px] leading-relaxed text-zinc-500">
+                  <p className="px-2.5 pb-1 pt-1 text-[10px] leading-relaxed text-[var(--ink-faint)]">
                     In the browser dialog, enable share audio (tab audio works best).
                   </p>
                 </div>
@@ -280,7 +280,7 @@ export function ControlBar({
               onClick={onToggleAnnotateDrawing}
               label={annotateDrawing ? "Stop drawing on screen" : "Draw on screen share"}
               icon={PencilLine}
-              tone="amber"
+              tone="accent"
             />
             {annotateDrawing && annotationColor && onAnnotationColorChange && (
               <AnnotationToolbar
@@ -299,14 +299,14 @@ export function ControlBar({
           onClick={onToggleSidebar}
           label="Toggle panel"
           icon={sidebarOpen ? PanelRight : MessageSquare}
-          tone="indigo"
+          tone="accent"
         />
 
         <Divider />
 
         <button
           onClick={onLeave}
-          className="group flex h-9 items-center gap-1.5 rounded-xl bg-rose-500/15 px-3 text-[12px] font-medium text-rose-200 transition hover:bg-rose-500/25"
+          className="group flex h-9 items-center gap-1.5 rounded-full px-3 text-[12px] font-medium text-[var(--accent)] transition hover:bg-[var(--accent-soft)]"
         >
           <LogOut className="h-3.5 w-3.5" />
           Leave
@@ -327,7 +327,7 @@ function ShareQualityPanel({
 }) {
   return (
     <div className={clsx("p-1.5", className)}>
-      <p className="px-1 pb-1.5 text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+      <p className="px-1 pb-1.5 font-mono text-[10px] font-semibold uppercase tracking-widest text-[var(--ink-faint)]">
         Stream quality
       </p>
       <div className="grid grid-cols-2 gap-1">
@@ -339,12 +339,12 @@ function ShareQualityPanel({
             className={clsx(
               "rounded-lg px-2 py-1.5 text-left transition",
               quality === preset.id
-                ? "bg-violet-500/25 ring-1 ring-violet-400/40"
-                : "hover:bg-white/[0.06]"
+                ? "bg-[var(--accent-soft)] ring-1 ring-[var(--accent)]/35"
+                : "hover:bg-[var(--paper-2)]"
             )}
           >
-            <span className="block text-[11px] font-medium text-white">{preset.label}</span>
-            <span className="block text-[10px] text-zinc-500">{preset.hint}</span>
+            <span className="block text-[11px] font-medium text-[var(--ink)]">{preset.label}</span>
+            <span className="block text-[10px] text-[var(--ink-faint)]">{preset.hint}</span>
           </button>
         ))}
       </div>
@@ -353,7 +353,7 @@ function ShareQualityPanel({
 }
 
 function Divider() {
-  return <span className="mx-0.5 h-6 w-px bg-white/[0.08]" />;
+  return <span className="mx-0.5 h-6 w-px bg-[var(--line)]" />;
 }
 
 function ToggleButton({
@@ -371,19 +371,15 @@ function ToggleButton({
   icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
   dangerWhenOff?: boolean;
   disabled?: boolean;
-  tone?: "default" | "indigo" | "violet" | "amber";
+  tone?: "default" | "accent";
 }) {
   const activeStyle =
-    tone === "indigo"
-      ? "bg-indigo-500/20 text-indigo-200 ring-1 ring-indigo-400/30"
-      : tone === "violet"
-        ? "bg-violet-500/20 text-violet-200 ring-1 ring-violet-400/30"
-        : tone === "amber"
-          ? "bg-amber-500/20 text-amber-100 ring-1 ring-amber-400/35"
-          : "bg-emerald-500/15 text-emerald-200 ring-1 ring-emerald-400/25";
+    tone === "accent"
+      ? "bg-[var(--accent)] text-white"
+      : "bg-[var(--accent)] text-white";
   const inactiveStyle = dangerWhenOff
-    ? "bg-rose-500/10 text-rose-200 hover:bg-rose-500/15"
-    : "bg-white/[0.04] text-zinc-300 hover:bg-white/[0.08]";
+    ? "text-[var(--accent)] hover:bg-[var(--accent-soft)]"
+    : "text-[var(--ink-2)] hover:bg-[var(--paper-2)]";
 
   return (
     <button
@@ -392,7 +388,7 @@ function ToggleButton({
       aria-label={label}
       disabled={disabled}
       className={clsx(
-        "flex h-9 w-9 items-center justify-center rounded-xl transition",
+        "flex h-10 w-10 items-center justify-center rounded-full transition",
         disabled && "cursor-not-allowed opacity-40",
         active ? activeStyle : inactiveStyle
       )}

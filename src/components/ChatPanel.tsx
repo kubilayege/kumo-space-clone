@@ -133,7 +133,7 @@ function TypingIndicator({ typers }: { typers: TypingUser[] }) {
           <span
             key={typer.userId}
             title={typer.userName}
-            className="flex h-5 w-5 items-center justify-center rounded-full text-[8px] font-semibold text-white ring-2 ring-[#0a0a14]"
+            className="flex h-5 w-5 items-center justify-center rounded-full text-[8px] font-semibold text-white ring-2 ring-white"
             style={{ backgroundColor: typer.userColor }}
           >
             {getInitials(typer.userName)}
@@ -141,11 +141,11 @@ function TypingIndicator({ typers }: { typers: TypingUser[] }) {
         ))}
       </div>
       <span className="flex gap-0.5">
-        <span className="h-1 w-1 animate-bounce rounded-full bg-indigo-400/80 [animation-delay:0ms]" />
-        <span className="h-1 w-1 animate-bounce rounded-full bg-indigo-400/80 [animation-delay:150ms]" />
-        <span className="h-1 w-1 animate-bounce rounded-full bg-indigo-400/80 [animation-delay:300ms]" />
+        <span className="h-1 w-1 animate-bounce rounded-full bg-[var(--accent)]/80 [animation-delay:0ms]" />
+        <span className="h-1 w-1 animate-bounce rounded-full bg-[var(--accent)]/80 [animation-delay:150ms]" />
+        <span className="h-1 w-1 animate-bounce rounded-full bg-[var(--accent)]/80 [animation-delay:300ms]" />
       </span>
-      <span className="truncate text-[11px] text-zinc-500">{formatTypingLabel(typers)}</span>
+      <span className="truncate text-[11px] text-[var(--ink-faint)]">{formatTypingLabel(typers)}</span>
     </div>
   );
 }
@@ -263,30 +263,30 @@ export function ChatPanel({
       <div
         className={clsx(
           "flex shrink-0 items-center gap-2 px-4 pb-2 transition-colors duration-300",
-          zoneFlash && "bg-indigo-500/10"
+          zoneFlash && "bg-[var(--accent-soft)]"
         )}
       >
-        <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-indigo-500/10">
-          <MessageSquare className="h-3.5 w-3.5 text-indigo-300" />
+        <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-[var(--accent-soft)]">
+          <MessageSquare className="h-3.5 w-3.5 text-[var(--accent)]" />
         </div>
-        <h3 className="text-[13px] font-semibold tracking-tight text-white">
+        <h3 className="text-[13px] font-semibold tracking-tight text-[var(--ink)]">
           Chat{currentZone ? ` · ${currentZone.name}` : ""}
         </h3>
         {currentZone && (
           <span
-            className="rounded-full px-1.5 py-0.5 text-[9px] font-medium capitalize text-zinc-800"
+            className="rounded-full px-1.5 py-0.5 text-[9px] font-medium capitalize text-[var(--ink-2)]"
             style={{ backgroundColor: currentZone.color }}
           >
             {currentZone.type}
           </span>
         )}
-        <span className="rounded-full bg-white/[0.06] px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-zinc-400">
+        <span className="rounded-full bg-[var(--paper-2)] px-1.5 py-0.5 font-mono text-[10px] font-medium tabular-nums text-[var(--ink-soft)]">
           {messages.length}
         </span>
       </div>
 
       <div className="shrink-0 px-4 pb-3">
-        <div className="flex gap-1 rounded-xl border border-white/[0.04] bg-white/[0.03] p-1 backdrop-blur-sm">
+        <div className="flex gap-1 rounded-xl border border-[var(--line)] bg-[var(--paper-2)] p-1">
           {SCOPES.map((option) => {
             const Icon = option.icon;
             const isActive = scope === option.value;
@@ -299,14 +299,14 @@ export function ChatPanel({
                 className={clsx(
                   "relative flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-medium transition-all duration-200",
                   isActive
-                    ? "bg-indigo-500/15 text-white shadow-[0_0_20px_rgba(99,102,241,0.25)] ring-1 ring-indigo-400/30"
-                    : "text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300"
+                    ? "bg-[var(--accent)] text-white shadow-[var(--shadow-sm)]"
+                    : "text-[var(--ink-soft)] hover:bg-[var(--surface)] hover:text-[var(--ink)]"
                 )}
               >
                 <Icon
                   className={clsx(
                     "h-3 w-3 shrink-0 transition-colors",
-                    isActive ? "text-indigo-300" : "text-zinc-500"
+                    isActive ? "text-white" : "text-[var(--ink-faint)]"
                   )}
                 />
                 {option.label}
@@ -315,7 +315,7 @@ export function ChatPanel({
           })}
         </div>
         {scope === "nearby" && currentZone && (
-          <p className="mt-1.5 text-[10px] text-zinc-500">
+          <p className="mt-1.5 text-[10px] text-[var(--ink-faint)]">
             Only people in {currentZone.name} and nearby range
           </p>
         )}
@@ -325,14 +325,13 @@ export function ChatPanel({
         {messages.length === 0 ? (
           <div className="flex h-full items-center justify-center px-2 text-center">
             <div className="relative max-w-[220px]">
-              <div className="pointer-events-none absolute -inset-8 rounded-full bg-indigo-500/10 blur-2xl" />
-              <div className="relative mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-white/[0.06] bg-gradient-to-br from-indigo-500/10 to-violet-500/5 shadow-[0_8px_32px_rgba(99,102,241,0.12)]">
-                <Sparkles className="h-5 w-5 text-indigo-300/80" />
+              <div className="relative mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-[var(--line)] bg-[var(--accent-soft)] shadow-[var(--shadow-sm)]">
+                <Sparkles className="h-5 w-5 text-[var(--accent)]" />
               </div>
-              <p className="relative mt-4 text-[13px] font-medium text-zinc-200">
+              <p className="relative mt-4 text-[13px] font-medium text-[var(--ink)]">
                 Start the conversation
               </p>
-              <p className="relative mt-1.5 text-[11px] leading-5 text-zinc-500">
+              <p className="relative mt-1.5 text-[11px] leading-5 text-[var(--ink-soft)]">
                 {currentZone
                   ? `Say something in ${currentZone.name} or reach people nearby.`
                   : "Say hi to the floor, whisper to someone nearby, or broadcast to all spaces."}
@@ -343,7 +342,7 @@ export function ChatPanel({
                   return (
                     <span
                       key={option.value}
-                      className="flex items-center gap-1 rounded-full border border-white/[0.06] bg-white/[0.03] px-2 py-0.5 text-[9px] text-zinc-500"
+                      className="flex items-center gap-1 rounded-full border border-[var(--line)] bg-[var(--surface)] px-2 py-0.5 text-[9px] text-[var(--ink-soft)]"
                     >
                       <Icon className="h-2.5 w-2.5" />
                       {option.label}
@@ -369,11 +368,11 @@ export function ChatPanel({
                 <div key={message.id}>
                   {showSeparator && (
                     <div className="flex items-center gap-3 py-3">
-                      <div className="h-px flex-1 bg-gradient-to-r from-transparent via-white/[0.08] to-transparent" />
-                      <span className="shrink-0 text-[10px] font-medium tracking-wide text-zinc-600">
+                      <div className="h-px flex-1 bg-[var(--line)]" />
+                      <span className="shrink-0 font-mono text-[10px] font-medium tracking-wide text-[var(--ink-faint)]">
                         {formatDateSeparator(message.timestamp)}
                       </span>
-                      <div className="h-px flex-1 bg-gradient-to-r from-transparent via-white/[0.08] to-transparent" />
+                      <div className="h-px flex-1 bg-[var(--line)]" />
                     </div>
                   )}
 
@@ -394,7 +393,7 @@ export function ChatPanel({
                         <div className="w-6 shrink-0">
                           {!sameAuthor ? (
                             <span
-                              className="flex h-6 w-6 items-center justify-center rounded-full text-[9px] font-semibold text-white shadow-sm ring-1 ring-white/10"
+                              className="flex h-6 w-6 items-center justify-center rounded-full text-[9px] font-semibold text-white shadow-sm ring-2 ring-white"
                               style={{ backgroundColor: message.userColor }}
                             >
                               {getInitials(message.userName)}
@@ -411,10 +410,10 @@ export function ChatPanel({
                               isSelf && "justify-end"
                             )}
                           >
-                            <span className="text-[11px] font-medium text-zinc-300">
+                            <span className="text-[11px] font-medium text-[var(--ink-2)]">
                               {isSelf ? "You" : message.userName}
                             </span>
-                            <span className="text-[10px] text-zinc-600">
+                            <span className="font-mono text-[10px] text-[var(--ink-faint)]">
                               {formatTime(message.timestamp)}
                             </span>
                             {message.scope !== "floor" && (
@@ -422,8 +421,8 @@ export function ChatPanel({
                                 className={clsx(
                                   "rounded-full border px-1.5 py-0 text-[9px] font-medium",
                                   message.scope === "nearby"
-                                    ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-200"
-                                    : "border-fuchsia-400/30 bg-fuchsia-500/10 text-fuchsia-200"
+                                    ? "border-[var(--status-ok)]/40 bg-[var(--status-ok)]/10 text-[var(--status-ok)]"
+                                    : "border-[var(--accent)]/30 bg-[var(--accent-soft)] text-[var(--accent)]"
                                 )}
                               >
                                 {message.scope === "nearby" ? "nearby" : "all"}
@@ -437,7 +436,7 @@ export function ChatPanel({
                             "px-3 py-2 text-[13px] leading-5",
                             isSelf
                               ? clsx(
-                                  "bg-gradient-to-br from-indigo-500/90 to-violet-600/90 text-white shadow-[0_4px_16px_rgba(99,102,241,0.2)]",
+                                  "bg-[var(--accent)] text-white shadow-[var(--shadow-sm)]",
                                   sameAuthor && !sameAuthorNext
                                     ? "rounded-2xl rounded-tr-md"
                                     : sameAuthor && sameAuthorNext
@@ -447,7 +446,7 @@ export function ChatPanel({
                                         : "rounded-2xl rounded-br-md"
                                 )
                               : clsx(
-                                  "border border-white/[0.06] bg-white/[0.05] text-zinc-200 backdrop-blur-sm",
+                                  "border border-[var(--line-2)] bg-[var(--surface)] text-[var(--ink)] shadow-[var(--shadow-sm)]",
                                   sameAuthor && !sameAuthorNext
                                     ? "rounded-2xl rounded-tl-md"
                                     : sameAuthor && sameAuthorNext
@@ -480,19 +479,19 @@ export function ChatPanel({
       <form onSubmit={handleSubmit} className="shrink-0 px-4 pb-4 pt-2">
         <div
           className={clsx(
-            "rounded-2xl p-px transition-all duration-200",
+            "rounded-2xl border bg-[var(--surface)] transition-all duration-200",
             text.trim()
-              ? "bg-gradient-to-r from-indigo-500/50 via-violet-500/40 to-indigo-500/50 shadow-[0_0_24px_rgba(99,102,241,0.15)]"
-              : "bg-gradient-to-r from-white/[0.08] via-indigo-500/20 to-white/[0.08]"
+              ? "border-[var(--accent)] shadow-[0_0_0_3px_var(--accent-ring)]"
+              : "border-[var(--line-2)]"
           )}
         >
-          <div className="flex items-center gap-2 rounded-[15px] bg-[#0a0a14]/95 px-3 py-2 backdrop-blur-sm">
+          <div className="flex items-center gap-2 px-3 py-2">
             <input
               value={text}
               onChange={handleInputChange}
               onBlur={handleInputBlur}
               placeholder={placeholderForScope(scope, currentZone)}
-              className="flex-1 bg-transparent text-[13px] text-white placeholder:text-zinc-600 focus:outline-none"
+              className="flex-1 bg-transparent text-[13px] text-[var(--ink)] placeholder:text-[var(--ink-faint)] focus:outline-none"
             />
             <button
               type="submit"
@@ -500,8 +499,8 @@ export function ChatPanel({
               className={clsx(
                 "flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-all duration-200",
                 text.trim()
-                  ? "bg-gradient-to-r from-indigo-500 to-violet-500 text-white shadow-md shadow-indigo-500/30 hover:shadow-indigo-500/45"
-                  : "bg-white/[0.04] text-zinc-600"
+                  ? "bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]"
+                  : "bg-[var(--paper-2)] text-[var(--ink-faint)]"
               )}
               aria-label="Send message"
             >
@@ -509,7 +508,7 @@ export function ChatPanel({
             </button>
           </div>
         </div>
-        <p className="mt-1.5 px-1 text-center text-[10px] text-zinc-600">
+        <p className="mt-1.5 px-1 text-center text-[10px] text-[var(--ink-faint)]">
           Sending to {activeScope?.hint ?? "everyone on this floor"}
         </p>
       </form>

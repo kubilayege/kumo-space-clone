@@ -24,19 +24,21 @@ export function AnnotationToolbar({
   return (
     <div
       className={clsx(
-        "flex items-center gap-1 rounded-full border border-white/10 bg-black/70 shadow-lg backdrop-blur-md",
-        overlay ? "px-1.5 py-1" : "gap-1.5 rounded-xl border-amber-400/25 px-2 py-1.5",
+        "flex items-center gap-1",
+        overlay
+          ? "rounded-full border border-white/10 bg-black/70 px-1.5 py-1 shadow-lg backdrop-blur-md"
+          : "gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface)] px-2 py-1.5 shadow-[var(--shadow-sm)]",
         className
       )}
       onPointerDown={(e) => e.stopPropagation()}
     >
       {!overlay && (
         <>
-          <span className="flex shrink-0 items-center gap-1 text-[11px] font-medium text-zinc-200">
+          <span className="flex shrink-0 items-center gap-1 text-[11px] font-medium text-[var(--ink-2)]">
             <PencilLine className="h-3.5 w-3.5" />
             Draw
           </span>
-          <div className="h-4 w-px shrink-0 bg-white/15" />
+          <div className="h-4 w-px shrink-0 bg-[var(--line)]" />
         </>
       )}
       {ANNOTATION_COLORS.map((color) => (
@@ -48,7 +50,13 @@ export function AnnotationToolbar({
           className={clsx(
             "rounded-full border-2 transition",
             overlay ? "h-4 w-4" : "h-5 w-5",
-            activeColor === color ? "border-white scale-110" : "border-white/20 hover:border-white/45"
+            activeColor === color
+              ? overlay
+                ? "scale-110 border-white"
+                : "scale-110 border-[var(--ink)]"
+              : overlay
+                ? "border-white/20 hover:border-white/45"
+                : "border-[var(--line-2)] hover:border-[var(--ink-faint)]"
           )}
           style={{ backgroundColor: color }}
         />
@@ -59,8 +67,10 @@ export function AnnotationToolbar({
           onClick={onClear}
           title="Clear marks on this screen"
           className={clsx(
-            "flex items-center justify-center rounded-full text-zinc-300 transition hover:bg-white/10 hover:text-white",
-            overlay ? "h-6 w-6" : "h-7 w-7"
+            "flex items-center justify-center rounded-full transition",
+            overlay
+              ? "text-zinc-300 hover:bg-white/10 hover:text-white h-6 w-6"
+              : "text-[var(--ink-soft)] hover:bg-[var(--paper-2)] hover:text-[var(--ink)] h-7 w-7"
           )}
         >
           <Eraser className={overlay ? "h-3 w-3" : "h-3.5 w-3.5"} />

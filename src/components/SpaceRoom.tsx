@@ -915,13 +915,13 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
 
   if (error || !localUser) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center gap-4 bg-[#07070d] px-6 text-center">
-        <div className="rounded-3xl border border-rose-500/20 bg-rose-500/5 px-6 py-5">
-          <p className="text-sm text-rose-300">{error ?? "Unable to join space"}</p>
+      <div className="flex h-screen flex-col items-center justify-center gap-4 bg-[var(--paper)] px-6 text-center">
+        <div className="rounded-2xl border border-[var(--accent)]/25 bg-[var(--accent-soft)] px-6 py-5">
+          <p className="text-sm text-[var(--accent-hover)]">{error ?? "Unable to join space"}</p>
         </div>
         <button
           onClick={() => router.push("/")}
-          className="rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-indigo-500/30"
+          className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white shadow-[var(--shadow-md)] transition hover:bg-[var(--accent-hover)]"
         >
           Back home
         </button>
@@ -932,7 +932,7 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
   const onlineCount = users.length;
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-[#07070d]">
+    <div className="relative h-screen w-screen overflow-hidden bg-[var(--paper)]">
       <SpatialAudio
         localUser={localUser}
         users={users}
@@ -945,16 +945,16 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
         <div className="relative flex min-w-0 flex-1 flex-col">
           {/* Top-left floating header */}
           <div className="pointer-events-none absolute left-4 top-4 z-30 flex items-center gap-2">
-            <div className="pointer-events-auto flex items-center gap-2.5 rounded-2xl border border-white/[0.08] bg-black/55 px-3 py-2 backdrop-blur-xl">
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 shadow-md shadow-indigo-500/30">
-                <span className="text-[11px] font-bold text-white">K</span>
+            <div className="pointer-events-auto flex items-center gap-2.5 rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-2 shadow-[var(--shadow-md)]">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--accent)] text-white">
+                <span className="text-[12px] font-bold">◐</span>
               </div>
               <div className="leading-tight">
-                <p className="max-w-[180px] truncate text-[12px] font-semibold text-white">
+                <p className="max-w-[180px] truncate text-[12px] font-semibold text-[var(--ink)]">
                   {spaceId}
                 </p>
-                <p className="flex items-center gap-1 text-[10px] text-zinc-400">
-                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                <p className="flex items-center gap-1 text-[10px] text-[var(--ink-soft)]">
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--status-ok)]" />
                   <Users className="h-2.5 w-2.5" />
                   {onlineCount} online
                 </p>
@@ -962,30 +962,30 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
               <button
                 onClick={handleCopyLink}
                 title="Copy space link"
-                className="ml-1 flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-white/[0.06] hover:text-white"
+                className="ml-1 flex h-7 w-7 items-center justify-center rounded-lg text-[var(--ink-faint)] transition hover:bg-[var(--paper-2)] hover:text-[var(--ink)]"
               >
                 <Copy className="h-3.5 w-3.5" />
               </button>
               {copied && (
-                <span className="text-[10px] font-medium text-emerald-300">copied!</span>
+                <span className="text-[10px] font-medium text-[var(--status-ok)]">copied!</span>
               )}
             </div>
           </div>
 
           {screenSharing && (
             <div className="pointer-events-none absolute left-1/2 top-4 z-30 -translate-x-1/2">
-              <div className="pointer-events-auto flex items-center gap-2 rounded-2xl border border-violet-400/30 bg-violet-500/15 px-3 py-2 backdrop-blur-xl">
-                <span className="flex items-center gap-1.5 text-[12px] font-medium text-violet-100">
+              <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-2 shadow-[var(--shadow-md)]">
+                <span className="flex items-center gap-1.5 text-[12px] font-medium text-[var(--ink)]">
                   <span className="relative flex h-2 w-2">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-violet-400 opacity-70" />
-                    <span className="relative inline-flex h-2 w-2 rounded-full bg-violet-400" />
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--accent)] opacity-70" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--accent)]" />
                   </span>
                   You are presenting
                 </span>
                 <button
                   type="button"
                   onClick={() => void stopScreenShare()}
-                  className="flex items-center gap-1.5 rounded-lg bg-rose-500/25 px-2.5 py-1 text-[11px] font-semibold text-rose-100 transition hover:bg-rose-500/35"
+                  className="flex items-center gap-1.5 rounded-lg bg-[var(--accent-soft)] px-2.5 py-1 text-[11px] font-semibold text-[var(--accent-hover)] transition hover:bg-[var(--accent)]/15"
                 >
                   <MonitorOff className="h-3.5 w-3.5" />
                   Stop share
@@ -1016,7 +1016,7 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
             <button
               type="button"
               onClick={() => setBroadcastPreviewOpen(true)}
-              className="pointer-events-auto absolute bottom-24 left-4 z-[45] flex items-center gap-2 rounded-xl border border-violet-400/35 bg-black/85 px-3 py-2 text-[11px] font-medium text-violet-100 shadow-lg backdrop-blur-xl transition hover:bg-violet-500/15"
+              className="pointer-events-auto absolute bottom-24 left-4 z-[45] flex items-center gap-2 rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-[11px] font-medium text-[var(--ink-2)] shadow-[var(--shadow-md)] transition hover:bg-[var(--paper-2)]"
             >
               <Monitor className="h-3.5 w-3.5" />
               Show broadcast preview
@@ -1025,7 +1025,7 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
 
           {mediaError && (
             <div className="pointer-events-none absolute bottom-24 left-1/2 z-40 max-w-md -translate-x-1/2 px-4">
-              <p className="pointer-events-auto rounded-xl border border-rose-400/30 bg-rose-500/15 px-4 py-2 text-center text-[12px] text-rose-100 backdrop-blur-xl">
+              <p className="pointer-events-auto rounded-xl border border-[var(--accent)]/30 bg-[var(--accent-soft)] px-4 py-2 text-center text-[12px] text-[var(--accent-hover)] shadow-[var(--shadow-md)]">
                 {mediaError}
               </p>
             </div>
@@ -1140,21 +1140,21 @@ function SidebarHeader({
 
   if (!presenter) {
     return (
-      <div className="flex items-center justify-between border-b border-white/[0.05] px-4 py-3">
+      <div className="flex items-center justify-between border-b border-[var(--line)] bg-[var(--paper-2)] px-4 py-3">
         <div className="flex items-center gap-2">
-          <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-500/15 ring-1 ring-emerald-400/25">
-            <Users className="h-3 w-3 text-emerald-300" />
+          <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-[var(--status-ok)]/15 ring-1 ring-[var(--status-ok)]/30">
+            <Users className="h-3 w-3 text-[var(--status-ok)]" />
           </span>
           <div className="leading-tight">
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-zinc-400">
+            <p className="font-mono text-[11px] font-semibold uppercase tracking-widest text-[var(--ink-soft)]">
               Floor activity
             </p>
-            <p className="text-[10px] text-zinc-500">{onlineCount} online</p>
+            <p className="text-[10px] text-[var(--ink-faint)]">{onlineCount} online</p>
           </div>
         </div>
         <button
           onClick={onClose}
-          className="rounded-lg p-1.5 text-zinc-400 transition hover:bg-white/[0.06] hover:text-white"
+          className="rounded-lg p-1.5 text-[var(--ink-faint)] transition hover:bg-[var(--surface)] hover:text-[var(--ink)]"
           aria-label="Close sidebar"
         >
           <X className="h-4 w-4" />
@@ -1164,26 +1164,26 @@ function SidebarHeader({
   }
 
   return (
-    <div className="flex items-center justify-between gap-2 border-b border-violet-400/15 bg-gradient-to-r from-violet-500/[0.06] via-transparent to-transparent px-3 py-2.5">
+    <div className="flex items-center justify-between gap-2 border-b border-[var(--line)] bg-[var(--accent-soft)] px-3 py-2.5">
       <div className="flex min-w-0 items-center gap-2">
-        <span className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-violet-500/20 ring-1 ring-violet-400/35">
-          <Monitor className="h-3.5 w-3.5 text-violet-200" />
+        <span className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--accent)]/15 ring-1 ring-[var(--accent)]/30">
+          <Monitor className="h-3.5 w-3.5 text-[var(--accent)]" />
           <span className="absolute -right-0.5 -top-0.5 flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-violet-400 opacity-70" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-violet-400" />
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--accent)] opacity-70" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--accent)]" />
           </span>
         </span>
         <div className="min-w-0 leading-tight">
-          <p className="truncate text-[12px] font-semibold text-white">
+          <p className="truncate text-[12px] font-semibold text-[var(--ink)]">
             <span
-              className="mr-1 inline-block h-2 w-2 rounded-full align-middle ring-1 ring-white/30"
+              className="mr-1 inline-block h-2 w-2 rounded-full align-middle ring-1 ring-white"
               style={{ backgroundColor: presenter.color }}
             />
             {isLocalPresenter ? "You" : presenter.name} is sharing
           </p>
-          <p className="text-[10px] text-zinc-400">
+          <p className="text-[10px] text-[var(--ink-soft)]">
             {watcherCount} {watcherCount === 1 ? "viewer" : "viewers"}
-            <span className="mx-1 text-zinc-700">·</span>
+            <span className="mx-1 text-[var(--ink-faint)]">·</span>
             {onlineCount} online
           </p>
         </div>
@@ -1193,7 +1193,7 @@ function SidebarHeader({
           <button
             type="button"
             onClick={onStopSharing}
-            className="flex items-center gap-1 rounded-lg bg-rose-500/15 px-2 py-1 text-[11px] font-medium text-rose-200 transition hover:bg-rose-500/25"
+            className="flex items-center gap-1 rounded-lg bg-[var(--accent)]/15 px-2 py-1 text-[11px] font-medium text-[var(--accent-hover)] transition hover:bg-[var(--accent)]/25"
             aria-label="Stop sharing"
             title="Stop sharing"
           >
@@ -1203,7 +1203,7 @@ function SidebarHeader({
         )}
         <button
           onClick={onClose}
-          className="rounded-lg p-1.5 text-zinc-400 transition hover:bg-white/[0.06] hover:text-white"
+          className="rounded-lg p-1.5 text-[var(--ink-faint)] transition hover:bg-[var(--surface)] hover:text-[var(--ink)]"
           aria-label="Close sidebar"
         >
           <X className="h-4 w-4" />
@@ -1220,13 +1220,13 @@ function OnlineUsersChip({ users, localUserId }: { users: User[]; localUserId: s
 
   return (
     <div className="pointer-events-none absolute right-4 top-4 z-30 hidden md:block">
-      <div className="pointer-events-auto flex items-center gap-2 rounded-2xl border border-white/[0.08] bg-black/55 px-3 py-2 backdrop-blur-xl">
+      <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-2 shadow-[var(--shadow-md)]">
         <div className="flex -space-x-2">
           {others.map((user) => (
             <div
               key={user.id}
               title={user.name}
-              className="flex h-6 w-6 items-center justify-center rounded-full text-[9px] font-semibold text-white ring-2 ring-[#07070d]"
+              className="flex h-6 w-6 items-center justify-center rounded-full text-[9px] font-semibold text-white ring-2 ring-white"
               style={{ backgroundColor: user.color }}
             >
               {user.name.slice(0, 1).toUpperCase()}
@@ -1234,7 +1234,7 @@ function OnlineUsersChip({ users, localUserId }: { users: User[]; localUserId: s
           ))}
         </div>
         {users.length - 1 > others.length && (
-          <span className="text-[11px] font-medium text-zinc-400">
+          <span className="text-[11px] font-medium text-[var(--ink-soft)]">
             +{users.length - 1 - others.length}
           </span>
         )}
@@ -1245,16 +1245,14 @@ function OnlineUsersChip({ users, localUserId }: { users: User[]; localUserId: s
 
 function LoadingState() {
   return (
-    <div className="relative flex h-screen items-center justify-center overflow-hidden bg-[#07070d]">
-      <div className="pointer-events-none absolute inset-0">
-        <div className="blob absolute left-1/3 top-1/3 h-[420px] w-[420px] bg-indigo-600/15 blur-3xl" />
-      </div>
+    <div className="relative flex h-screen items-center justify-center overflow-hidden bg-[var(--paper)]">
+      <div className="pointer-events-none absolute inset-0 dot-grid opacity-50" />
       <div className="relative flex flex-col items-center gap-4">
-        <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-2xl shadow-indigo-500/40">
-          <span className="text-xl font-bold text-white">K</span>
-          <span className="absolute -inset-1 rounded-2xl ring-2 ring-indigo-400/40 speak-pulse" />
+        <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--accent)] shadow-[var(--shadow-lg)]">
+          <span className="text-2xl font-bold text-white">◐</span>
+          <span className="absolute -inset-1 rounded-2xl ring-2 ring-[var(--accent-ring)] speak-pulse" />
         </div>
-        <p className="text-[13px] text-zinc-400">Stepping into the office…</p>
+        <p className="text-[13px] text-[var(--ink-soft)]">Stepping into the space…</p>
       </div>
     </div>
   );

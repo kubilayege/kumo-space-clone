@@ -1,17 +1,25 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { DM_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({
+const dmSans = DM_Sans({
   subsets: ["latin"],
   variable: "--font-sans",
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+});
+
+const jetBrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono-jb",
+  weight: ["400", "500", "600"],
   display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "Kumo Space — Virtual Office",
+  title: "Atrium — Virtual Spaces",
   description:
-    "A virtual office with spatial audio, avatars, and real-time collaboration. Walk up to teammates and start talking.",
+    "A spatial workspace with avatar movement, proximity voice, and real-time collaboration. Walk up to teammates and start talking.",
 };
 
 export default function RootLayout({
@@ -20,7 +28,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={`${dmSans.variable} ${jetBrainsMono.variable}`}>
       <body className="antialiased">{children}</body>
     </html>
   );

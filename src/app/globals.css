@@ -1,19 +1,76 @@
 @import "tailwindcss";
 
+/* ============================================================
+   Atrium — warm cream paper, deep ink, coral accent.
+   DM Sans for UI, JetBrains Mono for technical labels.
+   ============================================================ */
+
 :root {
-  --bg-base: #07070d;
-  --bg-deep: #0b0b14;
-  --bg-surface: #11111c;
-  --bg-elevated: #181826;
-  --bg-glass: rgba(20, 20, 32, 0.72);
-  --border-subtle: rgba(255, 255, 255, 0.06);
-  --border-strong: rgba(255, 255, 255, 0.12);
-  --text-primary: #f4f4f7;
-  --text-secondary: #a1a1b2;
-  --text-tertiary: #65657a;
-  --accent: #818cf8;
-  --accent-strong: #6366f1;
-  --accent-glow: rgba(99, 102, 241, 0.35);
+  /* Surfaces */
+  --paper: #f5f1e8;
+  --paper-2: #ece6d7;
+  --surface: #ffffff;
+  --surface-2: #fbf8f0;
+
+  /* Ink */
+  --ink: #1b1815;
+  --ink-2: #3a352d;
+  --ink-soft: #6a6357;
+  --ink-faint: #9c9588;
+  --ink-ghost: #c4bcab;
+
+  /* Lines */
+  --line: #e5ddc9;
+  --line-2: #d6ccb2;
+  --line-strong: #1b1815;
+
+  /* Accent — warm coral */
+  --accent: #e25a3c;
+  --accent-hover: #c94a2e;
+  --accent-soft: #fce9e3;
+  --accent-ring: rgba(226, 90, 60, 0.22);
+
+  /* Status */
+  --status-ok: #6cb270;
+  --status-busy: #e26c5c;
+  --status-away: #e2b05c;
+
+  /* Highlights */
+  --highlight: #fdf1b6;
+
+  /* World palette */
+  --floor: #faf6eb;
+  --floor-2: #f0e9d2;
+  --wall: #c9b68a;
+  --wall-2: #b59e70;
+  --room: #ece3cc;
+  --room-warm: #f3ddc1;
+  --grid: rgba(28, 24, 20, 0.06);
+  --grid-strong: rgba(28, 24, 20, 0.1);
+
+  /* Avatar palette */
+  --av-coral: #e25a3c;
+  --av-teal: #3f8e8a;
+  --av-gold: #c99136;
+  --av-plum: #8b5577;
+  --av-sage: #6c8f5a;
+  --av-sky: #4a7aae;
+
+  /* Type */
+  --font-ui: var(--font-sans, "DM Sans", system-ui, -apple-system, sans-serif);
+  --font-mono: var(--font-mono-jb, "JetBrains Mono", ui-monospace, monospace);
+
+  /* Radii + shadow */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 20px;
+  --r-pill: 999px;
+
+  --shadow-sm: 0 1px 2px rgba(28, 24, 20, 0.06), 0 1px 0 rgba(28, 24, 20, 0.04);
+  --shadow-md: 0 2px 4px rgba(28, 24, 20, 0.06), 0 8px 24px rgba(28, 24, 20, 0.08);
+  --shadow-lg: 0 8px 16px rgba(28, 24, 20, 0.08), 0 24px 56px rgba(28, 24, 20, 0.14);
+  --shadow-pop: 0 1px 2px rgba(28, 24, 20, 0.08), 0 12px 32px rgba(28, 24, 20, 0.18);
 }
 
 * {
@@ -27,10 +84,10 @@ body {
 }
 
 body {
-  background: var(--bg-base);
-  color: var(--text-primary);
-  font-family: var(--font-sans, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
-  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  letter-spacing: -0.005em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -47,9 +104,15 @@ button {
   outline: none;
 }
 
+.font-mono,
+.vs-mono {
+  font-family: var(--font-mono);
+  letter-spacing: -0.01em;
+}
+
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 9px;
+  height: 9px;
 }
 
 ::-webkit-scrollbar-track {
@@ -57,13 +120,13 @@ button {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--line-2);
   border-radius: 999px;
   transition: background 0.2s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--ink-faint);
 }
 
 @keyframes float-in {
@@ -99,10 +162,10 @@ button {
 @keyframes speak-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+    box-shadow: 0 0 0 0 rgba(108, 178, 112, 0);
   }
   50% {
-    box-shadow: 0 0 0 6px rgba(34, 197, 94, 0.35);
+    box-shadow: 0 0 0 6px rgba(108, 178, 112, 0.35);
   }
 }
 
@@ -189,26 +252,11 @@ button {
   animation: hero-rise 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-@keyframes hero-gradient {
-  0%,
-  100% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-}
-
-.hero-gradient-text {
-  background-size: 200% auto;
-  animation: hero-gradient 5s ease-in-out infinite;
-}
-
 @keyframes chat-bubble-float {
   0%,
   100% {
     transform: translateY(0);
-    opacity: 0.85;
+    opacity: 0.9;
   }
   50% {
     transform: translateY(-6px);
@@ -235,20 +283,6 @@ button {
   animation: color-ripple 0.55s cubic-bezier(0.21, 1, 0.34, 1) forwards;
 }
 
-@keyframes input-glow-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
-  }
-  50% {
-    box-shadow: 0 0 20px 2px rgba(99, 102, 241, 0.12);
-  }
-}
-
-.input-glow:focus {
-  animation: input-glow-pulse 2s ease-in-out infinite;
-}
-
 @keyframes stat-fade {
   from {
     opacity: 0;
@@ -264,30 +298,31 @@ button {
   animation: stat-fade 0.7s cubic-bezier(0.21, 1, 0.34, 1) both;
 }
 
+/* Warm 2D floor — cream paper with a faint ink grid. */
+.floor-pattern {
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px),
+    linear-gradient(180deg, var(--floor) 0%, var(--floor-2) 100%);
+  background-size: 32px 32px, 32px 32px, cover;
+}
+
 .dot-grid {
-  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-image: radial-gradient(circle, rgba(28, 24, 20, 0.07) 1px, transparent 1px);
   background-size: 24px 24px;
 }
 
-.floor-pattern {
-  background-image:
-    radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.035) 1px, transparent 0),
-    linear-gradient(180deg, #11111e 0%, #0c0c16 100%);
-  background-size: 28px 28px, cover;
-}
-
 .glass {
-  background: rgba(17, 17, 28, 0.72);
-  backdrop-filter: blur(18px) saturate(140%);
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(16px) saturate(120%);
+  -webkit-backdrop-filter: blur(16px) saturate(120%);
+  border: 1px solid var(--line);
 }
 
 .glass-strong {
-  background: rgba(11, 11, 20, 0.85);
-  backdrop-filter: blur(24px) saturate(160%);
-  -webkit-backdrop-filter: blur(24px) saturate(160%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  box-shadow: var(--shadow-lg);
 }
 
 .text-balance {
@@ -295,5 +330,33 @@ button {
 }
 
 .focus-ring:focus-visible {
-  box-shadow: 0 0 0 2px var(--bg-base), 0 0 0 4px var(--accent-strong);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+/* Window-chrome dots (desktop-app framing). */
+.chrome-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+}
+.chrome-dot.r {
+  background: #e26c5c;
+}
+.chrome-dot.y {
+  background: #e2b05c;
+}
+.chrome-dot.g {
+  background: #6cb270;
+}
+
+/* Keyboard hint key cap. */
+.vs-kbd {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 1px 6px;
+  color: var(--ink-2);
 }
