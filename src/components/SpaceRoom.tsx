@@ -60,6 +60,14 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
   const searchParams = useSearchParams();
   const name = searchParams.get("name") ?? "Guest";
   const color = searchParams.get("color") ?? undefined;
+  const spawnX = Number(searchParams.get("x"));
+  const spawnY = Number(searchParams.get("y"));
+  const spawn =
+    Number.isFinite(spawnX) && Number.isFinite(spawnY) && (spawnX || spawnY)
+      ? { x: spawnX, y: spawnY }
+      : undefined;
+  const wantMic = searchParams.get("mic") === "1";
+  const wantCam = searchParams.get("cam") === "1";
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -294,7 +302,7 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
   useEffect(() => {
     let mounted = true;
 
-    joinSpace(spaceId, name, color)
+    joinSpace(spaceId, name, color, spawn)
       .then(({ user, users: initialUsers, messages: initialMessages, annotations: initialAnnotations }) => {
         if (!mounted) return;
         positionRef.current = { x: user.x, y: user.y };
@@ -427,6 +435,7 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
       socket.off("annotate:clear");
       disconnectSocket();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [spaceId, name, color]);
 
   useEffect(() => {
@@ -866,6 +875,17 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
       setMediaError(message);
     }
   };
+
+  // Honor mic/camera choices made in the onboarding stepper (3-A): enable them
+  // once, right after the local user is in the space.
+  const autoMediaDoneRef = useRef(false);
+  useEffect(() => {
+    if (autoMediaDoneRef.current || !localUser) return;
+    if (!wantMic && !wantCam) return;
+    autoMediaDoneRef.current = true;
+    void updateMedia(wantMic, wantCam);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localUser]);
 
   const handleStatusChange = (status: UserStatus) => {
     getSocket().emit("user:status", status);

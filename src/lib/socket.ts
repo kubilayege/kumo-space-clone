@@ -19,7 +19,8 @@ export function getSocket(): Socket {
 export function joinSpace(
   spaceId: string,
   name: string,
-  color?: string
+  color?: string,
+  spawn?: { x: number; y: number }
 ): Promise<{ user: User; users: User[]; messages: ChatMessage[]; annotations: DrawStroke[] }> {
   const client = getSocket();
 
@@ -30,7 +31,7 @@ export function joinSpace(
 
     client.emit(
       "space:join",
-      { spaceId, name, color },
+      { spaceId, name, color, spawn },
       (response: {
         user: User;
         users: User[];

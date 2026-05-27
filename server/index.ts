@@ -95,6 +95,7 @@ io.on("connection", (socket: Socket) => {
         spaceId: string;
         name: string;
         color?: string;
+        spawn?: { x: number; y: number };
       },
       callback?: (response: {
         user: User;
@@ -109,12 +110,16 @@ io.on("connection", (socket: Socket) => {
         payload.color ??
         AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)];
 
+      const spawn = payload.spawn
+        ? clampPosition(payload.spawn.x, payload.spawn.y, DEFAULT_OFFICE)
+        : { x: DEFAULT_OFFICE.width / 2, y: DEFAULT_OFFICE.height / 2 + 40 };
+
       const user: User = {
         id: socket.id,
         name: name.trim().slice(0, 24) || "Guest",
         color,
-        x: DEFAULT_OFFICE.width / 2,
-        y: DEFAULT_OFFICE.height / 2 + 40,
+        x: spawn.x,
+        y: spawn.y,
         status: "available",
         micEnabled: false,
         cameraEnabled: false,
