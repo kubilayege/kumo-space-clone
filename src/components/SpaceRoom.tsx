@@ -999,8 +999,16 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
 
           {/* Office canvas */}
           <div className="absolute inset-0 p-4">
-            <OfficeCanvas users={users} localUser={localUser} onMove={emitMove} />
+            <OfficeCanvas
+              users={users}
+              localUser={localUser}
+              onMove={emitMove}
+              messages={messages}
+            />
           </div>
+
+          {/* Floating minimap (5-A) */}
+          <MiniMap users={users} localUserId={localUser.id} />
 
           {screenSharing && localStream && broadcastPreviewOpen && (
             <BroadcastPreview
@@ -1208,6 +1216,58 @@ function SidebarHeader({
         >
           <X className="h-4 w-4" />
         </button>
+      </div>
+    </div>
+  );
+}
+
+function MiniMap({ users, localUserId }: { users: User[]; localUserId: string }) {
+  const scale = Math.min(152 / DEFAULT_OFFICE.width, 78 / DEFAULT_OFFICE.height);
+  const mapW = DEFAULT_OFFICE.width * scale;
+  const mapH = DEFAULT_OFFICE.height * scale;
+
+  return (
+    <div className="pointer-events-none absolute bottom-6 left-4 z-30 hidden rounded-[10px] border border-[var(--line)] bg-[var(--surface)] p-2 shadow-[var(--shadow-md)] sm:block">
+      <div className="mb-1 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--ink-faint)]">
+        Map
+      </div>
+      <div
+        className="relative overflow-hidden rounded bg-[var(--floor-2)]"
+        style={{ width: mapW, height: mapH }}
+      >
+        {DEFAULT_OFFICE.zones.map((zone) => (
+          <div
+            key={zone.id}
+            className="absolute rounded-[2px] border border-[var(--wall-2)]/50"
+            style={{
+              left: zone.x * scale,
+              top: zone.y * scale,
+              width: zone.width * scale,
+              height: zone.height * scale,
+              background:
+                zone.type === "meeting" || zone.type === "focus"
+                  ? "var(--room-warm)"
+                  : "var(--room)",
+            }}
+          />
+        ))}
+        {users.map((user) => {
+          const isLocal = user.id === localUserId;
+          return (
+            <div
+              key={user.id}
+              className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border border-white"
+              style={{
+                left: user.x * scale,
+                top: user.y * scale,
+                width: isLocal ? 7 : 5,
+                height: isLocal ? 7 : 5,
+                background: user.color,
+                boxShadow: isLocal ? "0 0 0 2px var(--accent-ring)" : undefined,
+              }}
+            />
+          );
+        })}
       </div>
     </div>
   );

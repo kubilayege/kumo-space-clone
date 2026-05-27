@@ -1,9 +1,10 @@
 "use client";
 
 import clsx from "clsx";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   AUDIO_RANGE,
+  ChatMessage,
   DEFAULT_OFFICE,
   RoomZone,
   SCREEN_SHARE_RANGE,
@@ -14,10 +15,13 @@ import {
 } from "@/lib/types";
 import { Avatar } from "@/components/Avatar";
 
+const BUBBLE_TTL_MS = 8000;
+
 interface OfficeCanvasProps {
   users: User[];
   localUser: User;
   onMove: (x: number, y: number) => void;
+  messages?: ChatMessage[];
 }
 
 const ZONE_STYLES: Record<
@@ -42,11 +46,36 @@ const ZONE_STYLES: Record<
   },
 };
 
-export function OfficeCanvas({ users, localUser, onMove }: OfficeCanvasProps) {
+export function OfficeCanvas({ users, localUser, onMove, messages = [] }: OfficeCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const worldRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
+  const [now, setNow] = useState(() => Date.now());
   const map = DEFAULT_OFFICE;
+
+  // Ephemeral speech bubbles: the latest message per author within the TTL,
+  // rendered over that author's avatar (6-B). Tick every second so they expire.
+  const userById = useMemo(() => new Map(users.map((u) => [u.id, u])), [users]);
+  const bubbles = useMemo(() => {
+    const latest = new Map<string, ChatMessage>();
+    for (const message of messages) {
+      if (now - message.timestamp > BUBBLE_TTL_MS) continue;
+      if (!userById.has(message.userId)) continue;
+      latest.set(message.userId, message);
+    }
+    return Array.from(latest.values());
+  }, [messages, now, userById]);
+
+  useEffect(() => {
+    if (bubbles.length === 0) return;
+    const interval = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, [bubbles.length]);
+
+  useEffect(() => {
+    if (messages.length === 0) return;
+    setNow(Date.now());
+  }, [messages]);
 
   useLayoutEffect(() => {
     const updateScale = () => {
@@ -159,6 +188,25 @@ export function OfficeCanvas({ users, localUser, onMove }: OfficeCanvasProps) {
                 zoneName={zone?.name}
                 size="md"
               />
+            </div>
+          );
+        })}
+
+        {/* Ephemeral speech bubbles over avatars (6-B) */}
+        {bubbles.map((message) => {
+          const author = userById.get(message.userId);
+          if (!author) return null;
+          const mine = message.userId === localUser.id;
+          return (
+            <div
+              key={message.id}
+              className={clsx(
+                "vs-bubble animate-float-in absolute z-40",
+                mine && "mine"
+              )}
+              style={{ left: author.x, top: author.y - 34 }}
+            >
+              {message.text}
             </div>
           );
         })}
