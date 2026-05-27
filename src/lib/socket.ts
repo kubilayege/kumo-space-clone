@@ -2,7 +2,7 @@
 
 import { io, Socket } from "socket.io-client";
 import { DrawStroke } from "./annotations";
-import { ChatMessage, User } from "./types";
+import { ChatMessage, OfficeMap, User } from "./types";
 
 let socket: Socket | null = null;
 
@@ -21,7 +21,7 @@ export function joinSpace(
   name: string,
   color?: string,
   spawn?: { x: number; y: number }
-): Promise<{ user: User; users: User[]; messages: ChatMessage[]; annotations: DrawStroke[] }> {
+): Promise<{ user: User; users: User[]; messages: ChatMessage[]; annotations: DrawStroke[]; map: OfficeMap }> {
   const client = getSocket();
 
   return new Promise((resolve, reject) => {
@@ -37,6 +37,7 @@ export function joinSpace(
         users: User[];
         messages: ChatMessage[];
         annotations: DrawStroke[];
+        map: OfficeMap;
       }) => {
         if (response?.user) {
           resolve(response);

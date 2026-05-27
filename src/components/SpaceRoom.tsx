@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import clsx from "clsx";
-import { Copy, Monitor, MonitorOff, PhoneOff, UserPlus, Users, X } from "lucide-react";
+import { Copy, Monitor, MonitorOff, Pencil, PhoneOff, UserPlus, Users, X } from "lucide-react";
 import { ChatPanel } from "@/components/ChatPanel";
 import { ControlBar } from "@/components/ControlBar";
 import { InviteModal } from "@/components/InviteModal";
 import { OfficeCanvas } from "@/components/OfficeCanvas";
+import { SpaceEditor } from "@/components/SpaceEditor";
 import { SpatialAudio } from "@/components/SpatialAudio";
 import { BroadcastPreview } from "@/components/BroadcastPreview";
 import { ResizableSidebar } from "@/components/ResizableSidebar";
@@ -17,6 +18,7 @@ import {
   ChatMessage,
   DEFAULT_OFFICE,
   MOVE_SPEED,
+  OfficeMap,
   TypingEvent,
   TypingStopEvent,
   TypingUser,
@@ -95,6 +97,8 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [broadcastPreviewOpen, setBroadcastPreviewOpen] = useState(true);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [officeMap, setOfficeMap] = useState<OfficeMap>(DEFAULT_OFFICE);
 
   const keysPressed = useRef(new Set<string>());
   const positionRef = useRef({ x: 600, y: 440 });
@@ -270,8 +274,8 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
 
   const currentZone = useMemo(() => {
     if (!localUser) return null;
-    return getZoneAt(localUser.x, localUser.y, DEFAULT_OFFICE);
-  }, [localUser]);
+    return getZoneAt(localUser.x, localUser.y, officeMap);
+  }, [localUser, officeMap]);
 
   useEffect(() => {
     webrtcRef.current = new WebRTCManager(
@@ -303,7 +307,7 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
     let mounted = true;
 
     joinSpace(spaceId, name, color, spawn)
-      .then(({ user, users: initialUsers, messages: initialMessages, annotations: initialAnnotations }) => {
+      .then(({ user, users: initialUsers, messages: initialMessages, annotations: initialAnnotations, map }) => {
         if (!mounted) return;
         positionRef.current = { x: user.x, y: user.y };
         setLocalUser(user);
@@ -311,6 +315,7 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
         setUsers(initialUsers);
         setMessages(initialMessages);
         setAnnotations(strokesToMap(initialAnnotations ?? []));
+        if (map) setOfficeMap(map);
         setLoading(false);
       })
       .catch((joinError) => {
@@ -422,8 +427,13 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
       });
     });
 
+    socket.on("space:map", (map: OfficeMap) => {
+      setOfficeMap(map);
+    });
+
     return () => {
       mounted = false;
+      socket.off("space:map");
       socket.off("users:update");
       socket.off("user:moved");
       socket.off("user:updated");
@@ -490,14 +500,14 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
 
   const moveBy = useCallback(
     (dx: number, dy: number) => {
-      const next = clampPosition(positionRef.current.x + dx, positionRef.current.y + dy, {
-        width: 1200,
-        height: 800,
-        zones: [],
-      });
+      const next = clampPosition(
+        positionRef.current.x + dx,
+        positionRef.current.y + dy,
+        officeMap
+      );
       emitMove(next.x, next.y);
     },
-    [emitMove]
+    [emitMove, officeMap]
   );
 
   useEffect(() => {
@@ -1021,6 +1031,14 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
             <OnlineUsersChip users={users} localUserId={localUser.id} />
             <button
               type="button"
+              onClick={() => setEditorOpen(true)}
+              className="pointer-events-auto flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-[12px] font-medium text-[var(--ink-2)] shadow-[var(--shadow-md)] transition hover:bg-[var(--surface-2)]"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Edit</span>
+            </button>
+            <button
+              type="button"
               onClick={() => setInviteOpen(true)}
               className="pointer-events-auto flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-[12px] font-medium text-[var(--ink-2)] shadow-[var(--shadow-md)] transition hover:bg-[var(--surface-2)]"
             >
@@ -1033,6 +1051,18 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
             <InviteModal spaceId={spaceId} onClose={() => setInviteOpen(false)} />
           )}
 
+          {editorOpen && (
+            <SpaceEditor
+              spaceId={spaceId}
+              map={officeMap}
+              onPublish={(map) => {
+                setOfficeMap(map);
+                getSocket().emit("space:map:set", map);
+              }}
+              onClose={() => setEditorOpen(false)}
+            />
+          )}
+
           {/* Office canvas */}
           <div className="absolute inset-0 p-4">
             <OfficeCanvas
@@ -1040,11 +1070,12 @@ export function SpaceRoom({ spaceId }: SpaceRoomProps) {
               localUser={localUser}
               onMove={emitMove}
               messages={messages}
+              map={officeMap}
             />
           </div>
 
           {/* Floating minimap (5-A) */}
-          <MiniMap users={users} localUserId={localUser.id} />
+          <MiniMap users={users} localUserId={localUser.id} map={officeMap} />
 
           {screenSharing && localStream && broadcastPreviewOpen && (
             <BroadcastPreview
@@ -1257,10 +1288,18 @@ function SidebarHeader({
   );
 }
 
-function MiniMap({ users, localUserId }: { users: User[]; localUserId: string }) {
-  const scale = Math.min(152 / DEFAULT_OFFICE.width, 78 / DEFAULT_OFFICE.height);
-  const mapW = DEFAULT_OFFICE.width * scale;
-  const mapH = DEFAULT_OFFICE.height * scale;
+function MiniMap({
+  users,
+  localUserId,
+  map,
+}: {
+  users: User[];
+  localUserId: string;
+  map: OfficeMap;
+}) {
+  const scale = Math.min(152 / map.width, 78 / map.height);
+  const mapW = map.width * scale;
+  const mapH = map.height * scale;
 
   return (
     <div className="pointer-events-none absolute bottom-6 left-4 z-30 hidden rounded-[10px] border border-[var(--line)] bg-[var(--surface)] p-2 shadow-[var(--shadow-md)] sm:block">
@@ -1271,7 +1310,7 @@ function MiniMap({ users, localUserId }: { users: User[]; localUserId: string })
         className="relative overflow-hidden rounded bg-[var(--floor-2)]"
         style={{ width: mapW, height: mapH }}
       >
-        {DEFAULT_OFFICE.zones.map((zone) => (
+        {map.zones.map((zone) => (
           <div
             key={zone.id}
             className="absolute rounded-[2px] border border-[var(--wall-2)]/50"

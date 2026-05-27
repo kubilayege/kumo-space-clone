@@ -6,6 +6,8 @@ import {
   AVATAR_COLORS,
   ChatMessage,
   DEFAULT_OFFICE,
+  OfficeMap,
+  RoomZone,
   User,
   UserStatus,
   clampPosition,
@@ -25,6 +27,48 @@ function getAllowedOrigins(): string[] {
 const spaces = new Map<string, Map<string, User>>();
 const chatHistory = new Map<string, ChatMessage[]>();
 const annotationStrokes = new Map<string, Map<string, DrawStroke[]>>();
+const spaceMaps = new Map<string, OfficeMap>();
+
+const ZONE_TYPES = new Set(["open", "meeting", "focus", "lounge"]);
+
+function getSpaceMap(spaceId: string): OfficeMap {
+  return spaceMaps.get(spaceId) ?? DEFAULT_OFFICE;
+}
+
+// Validate + clamp an incoming map so a malformed client payload can't corrupt
+// shared state. Dimensions stay fixed to the canonical floor size.
+function sanitizeMap(raw: unknown): OfficeMap | null {
+  if (!raw || typeof raw !== "object") return null;
+  const candidate = raw as { zones?: unknown };
+  if (!Array.isArray(candidate.zones)) return null;
+  const { width, height } = DEFAULT_OFFICE;
+  const zones: RoomZone[] = [];
+  for (const entry of candidate.zones.slice(0, 40)) {
+    if (!entry || typeof entry !== "object") continue;
+    const z = entry as Partial<RoomZone>;
+    if (
+      typeof z.x !== "number" ||
+      typeof z.y !== "number" ||
+      typeof z.width !== "number" ||
+      typeof z.height !== "number"
+    ) {
+      continue;
+    }
+    const x = Math.max(0, Math.min(width, z.x));
+    const y = Math.max(0, Math.min(height, z.y));
+    zones.push({
+      id: typeof z.id === "string" ? z.id.slice(0, 40) : `zone-${zones.length}`,
+      name: typeof z.name === "string" ? z.name.slice(0, 40) : "Room",
+      x,
+      y,
+      width: Math.max(60, Math.min(width - x, z.width)),
+      height: Math.max(60, Math.min(height - y, z.height)),
+      type: ZONE_TYPES.has(z.type as string) ? (z.type as RoomZone["type"]) : "open",
+      color: typeof z.color === "string" ? z.color.slice(0, 32) : "#ECE3CC",
+    });
+  }
+  return { width, height, zones };
+}
 
 function getSpaceAnnotations(spaceId: string): DrawStroke[] {
   const byTarget = annotationStrokes.get(spaceId);
@@ -102,6 +146,7 @@ io.on("connection", (socket: Socket) => {
         users: User[];
         messages: ChatMessage[];
         annotations: DrawStroke[];
+        map: OfficeMap;
       }) => void
     ) => {
       const { spaceId, name } = payload;
@@ -139,9 +184,18 @@ io.on("connection", (socket: Socket) => {
         users: serializeUsers(users),
         messages: chatHistory.get(spaceId) ?? [],
         annotations: getSpaceAnnotations(spaceId),
+        map: getSpaceMap(spaceId),
       });
     }
   );
+
+  socket.on("space:map:set", (rawMap: unknown) => {
+    if (!currentSpaceId) return;
+    const map = sanitizeMap(rawMap);
+    if (!map) return;
+    spaceMaps.set(currentSpaceId, map);
+    io.to(currentSpaceId).emit("space:map", map);
+  });
 
   socket.on("annotate:stroke", (stroke: DrawStroke) => {
     if (!currentSpaceId || !stroke?.targetId) return;
@@ -171,7 +225,7 @@ io.on("connection", (socket: Socket) => {
     const user = users.get(currentUserId);
     if (!user) return;
 
-    const clamped = clampPosition(payload.x, payload.y, DEFAULT_OFFICE);
+    const clamped = clampPosition(payload.x, payload.y, getSpaceMap(currentSpaceId));
     user.x = clamped.x;
     user.y = clamped.y;
 
@@ -224,7 +278,7 @@ io.on("connection", (socket: Socket) => {
       const text = payload.text.trim();
       if (!text) return;
 
-      const zone = getZoneAt(user.x, user.y, DEFAULT_OFFICE);
+      const zone = getZoneAt(user.x, user.y, getSpaceMap(currentSpaceId));
 
       const message = addChatMessage(currentSpaceId, {
         id: uuidv4(),
@@ -258,7 +312,7 @@ io.on("connection", (socket: Socket) => {
       const user = users.get(currentUserId);
       if (!user) return;
 
-      const zone = getZoneAt(user.x, user.y, DEFAULT_OFFICE);
+      const zone = getZoneAt(user.x, user.y, getSpaceMap(currentSpaceId));
       const typingPayload = {
         userId: user.id,
         userName: user.name,

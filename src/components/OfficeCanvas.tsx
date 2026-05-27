@@ -6,6 +6,7 @@ import {
   AUDIO_RANGE,
   ChatMessage,
   DEFAULT_OFFICE,
+  OfficeMap,
   RoomZone,
   SCREEN_SHARE_RANGE,
   User,
@@ -22,6 +23,7 @@ interface OfficeCanvasProps {
   localUser: User;
   onMove: (x: number, y: number) => void;
   messages?: ChatMessage[];
+  map?: OfficeMap;
 }
 
 const ZONE_STYLES: Record<
@@ -46,12 +48,17 @@ const ZONE_STYLES: Record<
   },
 };
 
-export function OfficeCanvas({ users, localUser, onMove, messages = [] }: OfficeCanvasProps) {
+export function OfficeCanvas({
+  users,
+  localUser,
+  onMove,
+  messages = [],
+  map = DEFAULT_OFFICE,
+}: OfficeCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const worldRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   const [now, setNow] = useState(() => Date.now());
-  const map = DEFAULT_OFFICE;
 
   // Ephemeral speech bubbles: the latest message per author within the TTL,
   // rendered over that author's avatar (6-B). Tick every second so they expire.
